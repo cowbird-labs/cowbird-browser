@@ -98,6 +98,29 @@ export async function unlockIdentity(
 }
 
 /**
+ * identityFromPrivateKeys reconstructs an Identity from its stored private keys,
+ * deriving the public keys and fingerprint. Used to rehydrate an unlocked
+ * session in the background worker after a service-worker restart, without the
+ * unlock password (only the already-decrypted private keys are kept, in
+ * in-memory session storage).
+ */
+export function identityFromPrivateKeys(
+  encryptionPriv: Uint8Array,
+  signingPriv: Uint8Array,
+): Identity {
+  const encryptionPub = sodium.crypto_scalarmult_base(encryptionPriv);
+  let signingPub: Uint8Array = new Uint8Array(0);
+  if (signingPriv.length > 0) signingPub = sodium.crypto_sign_ed25519_sk_to_pk(signingPriv);
+  return {
+    signingPub,
+    signingPriv,
+    encryptionPub,
+    encryptionPriv,
+    fingerprint: fingerprint(encryptionPub),
+  };
+}
+
+/**
  * ensureSigningKey attaches a fresh Ed25519 keypair if the identity has none —
  * the migration path for identities created before signing keys existed. Returns
  * whether a key was added (the caller then persists and re-publishes).
