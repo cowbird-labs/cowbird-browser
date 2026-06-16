@@ -1,8 +1,15 @@
 import browser from 'webextension-polyfill';
+import type { Runtime } from 'webextension-polyfill';
 import { initCrypto } from '../crypto/sodium';
-import { dispatch } from './handlers';
+import { dispatch, matchesForHost, credsForItem, codeForItem } from './handlers';
 import type { RpcRequest, RpcResponse } from '../messaging/protocol';
-import type { BackgroundMessage, OpenPopupResponse } from '../messaging/content';
+import type {
+  BackgroundMessage,
+  OpenPopupResponse,
+  MatchesResponse,
+  FillItemResponse,
+  FillCodeResponse,
+} from '../messaging/content';
 
 // The background worker owns all key material and Vault access; the popup never
 // touches Vault or crypto directly, only this RPC surface. startBackground wires
@@ -12,11 +19,24 @@ export function startBackground(): void {
   const ready = initCrypto();
 
   browser.runtime.onMessage.addListener(
-    (message: unknown): Promise<RpcResponse | OpenPopupResponse> => {
-      // Control messages from the content script's in-field icon carry a `type`;
-      // RPC requests from the popup carry a `method`.
-      if ((message as BackgroundMessage)?.type === 'cowbird:openPopup') {
-        return openActionPopup();
+    (
+      message: unknown,
+      sender: Runtime.MessageSender,
+    ): Promise<
+      RpcResponse | OpenPopupResponse | MatchesResponse | FillItemResponse | FillCodeResponse
+    > => {
+      // Control messages from the content script carry a `type`; popup RPC
+      // requests carry a `method`.
+      const ctrl = message as BackgroundMessage;
+      switch (ctrl?.type) {
+        case 'cowbird:openPopup':
+          return openActionPopup();
+        case 'cowbird:matches':
+          return handleMatches(ready, sender);
+        case 'cowbird:fillItem':
+          return handleFillItem(ready, sender, ctrl.id);
+        case 'cowbird:fillCode':
+          return handleFillCode(ready, sender, ctrl.id);
       }
       const req = message as RpcRequest;
       return (async (): Promise<RpcResponse> => {
@@ -30,6 +50,62 @@ export function startBackground(): void {
       })();
     },
   );
+}
+
+// senderHost derives the requesting frame's hostname. Returns null for messages
+// that didn't come from a tab's content script (e.g. the popup), so page-scoped
+// requests can be refused.
+function senderHost(sender: Runtime.MessageSender): string | null {
+  if (!sender.tab?.id) return null;
+  try {
+    return new URL(sender.url ?? sender.tab.url ?? '').hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleMatches(
+  ready: Promise<unknown>,
+  sender: Runtime.MessageSender,
+): Promise<MatchesResponse> {
+  await ready;
+  const host = senderHost(sender);
+  if (!host) return { locked: false, matches: [] };
+  try {
+    return await matchesForHost(host);
+  } catch {
+    return { locked: true, matches: [] };
+  }
+}
+
+async function handleFillItem(
+  ready: Promise<unknown>,
+  sender: Runtime.MessageSender,
+  id: string,
+): Promise<FillItemResponse> {
+  await ready;
+  const host = senderHost(sender);
+  if (!host) return { error: 'no host' };
+  try {
+    return await credsForItem(id, host);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function handleFillCode(
+  ready: Promise<unknown>,
+  sender: Runtime.MessageSender,
+  id: string,
+): Promise<FillCodeResponse> {
+  await ready;
+  const host = senderHost(sender);
+  if (!host) return { error: 'no host' };
+  try {
+    return await codeForItem(id, host);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 // openActionPopup opens the toolbar popup programmatically. Support is uneven:

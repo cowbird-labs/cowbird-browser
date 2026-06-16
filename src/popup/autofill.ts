@@ -1,5 +1,6 @@
 import browser from 'webextension-polyfill';
 import type { ContentMessage, FillResponse } from '../messaging/content';
+export { hostMatches } from '../autofill/match';
 
 export interface ActiveTab {
   id: number;
@@ -33,17 +34,4 @@ export async function fillActiveTab(
     // restricted page). The caller surfaces a hint to reload.
     return false;
   }
-}
-
-/** hostMatches reports whether a stored item URL belongs to the given hostname,
- * allowing subdomain matches in either direction (login.example.com ⇄ example.com). */
-export function hostMatches(itemUrl: string, host: string): boolean {
-  let itemHost: string;
-  try {
-    itemHost = new URL(itemUrl.includes('://') ? itemUrl : `https://${itemUrl}`).hostname;
-  } catch {
-    return false;
-  }
-  if (!itemHost || !host) return false;
-  return itemHost === host || host.endsWith(`.${itemHost}`) || itemHost.endsWith(`.${host}`);
 }

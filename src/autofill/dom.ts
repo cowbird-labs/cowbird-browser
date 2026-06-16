@@ -159,3 +159,69 @@ export function fillCredentials(username: string, password: string): boolean {
   }
   return filled;
 }
+
+// --- One-time-code (TOTP) fields ----------------------------------------------
+
+// A code field can be text/tel/number (or a single-digit segmented box). Never a
+// password field.
+function isCodeLike(input: HTMLInputElement): boolean {
+  const type = (input.getAttribute('type') ?? 'text').toLowerCase();
+  return type === 'text' || type === 'tel' || type === 'number' || type === '';
+}
+
+// Hints that a field is for a one-time/2FA code. Deliberately avoids matching
+// plain "password" (excluded by type anyway).
+const OTP_HINT =
+  /otp|2fa|mfa|totp|one[\s_-]?time|auth(?:entication)?[\s_-]?code|security[\s_-]?code|verif|passcode|\btoken\b/i;
+
+// segmentedGroup returns the single-character code boxes grouped with `el` (the
+// "type each digit in its own box" pattern), in document order. Empty unless
+// `el` itself is a maxlength=1 box and there are several siblings like it.
+function segmentedGroup(el: HTMLInputElement): HTMLInputElement[] {
+  if (el.maxLength !== 1) return [];
+  for (const scope of [el.form, el.parentElement, el.parentElement?.parentElement]) {
+    if (!scope) continue;
+    const boxes = deepQueryAll<HTMLInputElement>('input', scope).filter(
+      (i) => i.maxLength === 1 && isCodeLike(i) && isVisible(i),
+    );
+    if (boxes.length >= 4 && boxes.includes(el)) {
+      return boxes.sort((a, b) =>
+        a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+      );
+    }
+  }
+  return [];
+}
+
+/** isOtpField reports whether a focused input collects a one-time/2FA code. */
+export function isOtpField(el: HTMLInputElement): boolean {
+  if (!isVisible(el) || !isCodeLike(el)) return false;
+  if ((el.autocomplete || '').toLowerCase().includes('one-time-code')) return true;
+  const hint = `${el.name} ${el.id} ${el.getAttribute('aria-label') ?? ''} ${
+    el.placeholder ?? ''
+  }`.toLowerCase();
+  if (OTP_HINT.test(hint)) return true;
+  return segmentedGroup(el).length >= 4;
+}
+
+/**
+ * fillOtpCode types a code into the focused one-time-code field. Segmented
+ * inputs (one box per digit) get one character each; a single field gets the
+ * whole code. Returns whether anything was filled.
+ */
+export function fillOtpCode(code: string, field: HTMLInputElement): boolean {
+  if (!code) return false;
+  const group = segmentedGroup(field);
+  if (group.length >= code.length) {
+    code.split('').forEach((ch, i) => {
+      const box = group[i]!;
+      box.focus();
+      setNativeValue(box, ch);
+    });
+    group[Math.min(code.length, group.length) - 1]?.focus();
+    return true;
+  }
+  field.focus();
+  setNativeValue(field, code);
+  return true;
+}

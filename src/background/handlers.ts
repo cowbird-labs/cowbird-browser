@@ -8,7 +8,10 @@ import {
   importIdentity,
 } from '../core/identity';
 import { rotateKey, rotationCompleter } from '../core/rotation';
+import { hostMatches } from '../autofill/match';
+import { totpCode } from '../items/totp';
 import type { Content } from '../items/types';
+import type { MatchSummary } from '../messaging/content';
 import type { Envelope, SharedLink } from '../sharing/types';
 import type {
   Api,
@@ -238,6 +241,82 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
     return stateInfo();
   },
 };
+
+// --- In-page autofill (content-script driven) ---------------------------------
+// These power the on-focus menu. They are NOT part of the popup RPC `Api`; the
+// background message listener calls them directly with a host derived from the
+// sender frame, so everything stays scoped to the page that asked.
+
+/**
+ * matchesForHost returns the login items whose stored URLs match `host`,
+ * projected to metadata only (no secrets). When the vault is locked (or not
+ * connected) it reports `locked: true` and no matches — the UI then offers to
+ * open the popup to unlock.
+ */
+export async function matchesForHost(
+  host: string,
+): Promise<{ locked: boolean; matches: MatchSummary[] }> {
+  let app;
+  try {
+    app = await requireApp();
+  } catch {
+    return { locked: true, matches: [] };
+  }
+  const matches: MatchSummary[] = [];
+  for (const env of await app.service.listItems()) {
+    try {
+      const content = await app.service.openOwnItem(env);
+      if (content.kind !== 'login') continue;
+      const urls = content.data.urls ?? [];
+      if (urls.some((u) => hostMatches(u, host))) {
+        matches.push({
+          id: env.id,
+          title: content.data.title,
+          username: content.data.username,
+          hasTotp: Boolean(content.data.totp),
+        });
+      }
+    } catch {
+      // Skip items that fail to decrypt.
+    }
+  }
+  return { locked: false, matches };
+}
+
+/**
+ * credsForItem returns the username/password for a login item, but only if one
+ * of its URLs matches `host` — so a content script can never pull credentials
+ * for an item unrelated to the page it runs on.
+ */
+export async function credsForItem(
+  id: string,
+  host: string,
+): Promise<{ username: string; password: string }> {
+  const app = await requireApp();
+  const env = await app.session.store.getItem(id);
+  const content = await app.service.openOwnItem(env);
+  if (content.kind !== 'login') throw new Error('not a login item');
+  const urls = content.data.urls ?? [];
+  if (!urls.some((u) => hostMatches(u, host))) throw new Error('item does not match host');
+  return { username: content.data.username ?? '', password: content.data.password ?? '' };
+}
+
+/**
+ * codeForItem returns the current one-time code for a login's stored TOTP
+ * secret, host-scoped like credsForItem. Only the generated code leaves the
+ * worker — never the secret.
+ */
+export async function codeForItem(id: string, host: string): Promise<{ code: string }> {
+  const app = await requireApp();
+  const env = await app.session.store.getItem(id);
+  const content = await app.service.openOwnItem(env);
+  if (content.kind !== 'login') throw new Error('not a login item');
+  const urls = content.data.urls ?? [];
+  if (!urls.some((u) => hostMatches(u, host))) throw new Error('item does not match host');
+  if (!content.data.totp) throw new Error('no TOTP secret');
+  const { code } = await totpCode(content.data.totp);
+  return { code };
+}
 
 /** dispatch routes a decoded RPC request to its handler. */
 export function dispatch(method: Method, params: unknown): Promise<unknown> {

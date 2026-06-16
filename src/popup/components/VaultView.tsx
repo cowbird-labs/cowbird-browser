@@ -80,7 +80,12 @@ export function VaultView({
         </div>
       </div>
       {error && <p className="error screen">{error}</p>}
-      {items && <CurrentSite items={items} />}
+      {items && (
+        <CurrentSite
+          items={items}
+          onSelect={(it) => setView({ kind: 'detail', id: it.id, shared: it.shared })}
+        />
+      )}
       <ItemList
         items={items}
         onSelect={(it) => setView({ kind: 'detail', id: it.id, shared: it.shared })}

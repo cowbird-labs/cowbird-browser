@@ -1,29 +1,9 @@
-import { TOTP } from 'totp-generator';
+// Popup-facing TOTP helpers. Code generation lives in ../items/totp (shared with
+// the worker); this module keeps the UI-only display helper and re-exports the
+// generator under the name the detail view already uses.
 
-// Live one-time code generation for TOTP fields, mirroring the desktop app's
-// totpNow (internal/ui/detail.go): RFC 6238 defaults (SHA-1, 6 digits, 30s
-// period), internal spaces stripped, codes zero-padded to a fixed width. The
-// library uppercases and strips base32 padding itself; explicitZeroPad keeps
-// short codes at 6 digits so they match the Go output.
-
-export const TOTP_PERIOD = 30;
-
-export interface TotpCode {
-  code: string;
-  /** Whole seconds left in the current period. */
-  remaining: number;
-}
-
-export async function totpNow(secret: string): Promise<TotpCode> {
-  const cleaned = secret.replace(/ /g, '');
-  if (!cleaned) throw new Error('empty TOTP secret');
-  const now = Date.now();
-  const { otp, expires } = await TOTP.generate(cleaned, {
-    timestamp: now,
-    explicitZeroPad: true,
-  });
-  return { code: otp, remaining: Math.max(0, Math.ceil((expires - now) / 1000)) };
-}
+export { TOTP_PERIOD, totpCode as totpNow } from '../items/totp';
+export type { TotpCode } from '../items/totp';
 
 /** Insert a space every `size` characters, e.g. "123456" -> "123 456". */
 export function groupDigits(s: string, size = 3): string {

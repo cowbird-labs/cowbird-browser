@@ -39,9 +39,18 @@ export default defineConfig({
         '128': 'icon/128.png',
       },
     },
-    // Firefox requires an explicit add-on id and storage.session lands in FF 115.
+    // Firefox needs an explicit add-on id. Min version 142: storage.session needs
+    // ≥115, but data_collection_permissions is honored only on Firefox ≥140 /
+    // Firefox for Android ≥142, so 142 clears the AMO version-mismatch warnings.
     browser_specific_settings: {
-      gecko: { id: 'cowbird@avitac.co', strict_min_version: '115.0' },
+      gecko: {
+        id: 'cowbird@avitac.co',
+        strict_min_version: '142.0',
+        data_collection_permissions: {
+          required: ['websiteContent'],
+          optional: [],
+        },
+      },
     },
   },
   vite: () => ({

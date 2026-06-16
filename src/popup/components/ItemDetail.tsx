@@ -1,43 +1,74 @@
 import { useCallback, useEffect, useState } from 'react';
 import { rpc } from '../../messaging/rpc';
 import type { ItemDetail as ItemDetailData } from '../../messaging/protocol';
-import type { Field } from '../../items/types';
+import type { Field, FieldType } from '../../items/types';
 import { TYPE_FIELDS, typeLabel } from '../itemSchema';
 import { copyText, errorMessage } from '../util';
 import { getActiveTab, fillActiveTab } from '../autofill';
-import { totpNow, groupDigits } from '../totp';
+import { totpNow, groupDigits, TOTP_PERIOD } from '../totp';
+import { Icon } from './Icon';
 import { ItemEditor } from './ItemEditor';
 import { SharePanel } from './SharePanel';
 
-function FieldRow({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
+// useCopied gives a click handler that copies a value and briefly flips a
+// `copied` flag for "Copied" feedback on the row.
+function useCopied(): [boolean, (value: string) => void] {
+  const [copied, setCopied] = useState(false);
+  const copy = (value: string) => {
+    if (!value) return;
+    void copyText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  };
+  return [copied, copy];
+}
+
+function FieldRow({
+  icon,
+  label,
+  value,
+  secret,
+  mono,
+}: {
+  icon?: string;
+  label: string;
+  value: string;
+  secret?: boolean;
+  mono?: boolean;
+}) {
   const [revealed, setRevealed] = useState(false);
+  const [copied, copy] = useCopied();
   if (!value) return null;
-  const shown = secret && !revealed ? '••••••••' : value;
+  const shown = secret && !revealed ? '••••••••••••' : value;
   return (
     <div className="field">
-      <div className="field-label">{label}</div>
-      <div className="field-value">
-        <span className="val">{shown}</span>
-        {secret && (
-          <button className="iconbtn" title={revealed ? 'Hide' : 'Reveal'} onClick={() => setRevealed((r) => !r)}>
-            {revealed ? '🙈' : '👁'}
-          </button>
-        )}
-        <button className="iconbtn" title="Copy" onClick={() => void copyText(value)}>
-          ⧉
+      <Icon name={icon} className="field-icon" />
+      <button type="button" className="field-main" title="Copy" onClick={() => copy(value)}>
+        <div className="field-label">{copied ? 'Copied' : label}</div>
+        <div className={`val${mono ? ' mono' : ''}`}>{shown}</div>
+      </button>
+      {secret && (
+        <button
+          type="button"
+          className="iconbtn"
+          title={revealed ? 'Hide' : 'Reveal'}
+          onClick={() => setRevealed((r) => !r)}
+        >
+          <Icon name={revealed ? 'eye-off' : 'eye'} size={16} />
         </button>
-      </div>
+      )}
     </div>
   );
 }
 
 // Renders the live one-time code derived from a stored TOTP secret rather than
-// the secret itself, refreshing every second with a countdown to the next
-// rotation. Copy yields the current digits (no spacing).
-function TotpRow({ label, secret }: { label: string; secret: string }) {
+// the secret itself, refreshing every second with a depleting countdown ring.
+// Copy yields the current digits (no spacing).
+function TotpRow({ icon, label, secret }: { icon?: string; label: string; secret: string }) {
   const [code, setCode] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [invalid, setInvalid] = useState(false);
+  const [copied, copy] = useCopied();
 
   useEffect(() => {
     if (!secret) return;
@@ -66,19 +97,54 @@ function TotpRow({ label, secret }: { label: string; secret: string }) {
   if (!secret) return null;
   return (
     <div className="field">
-      <div className="field-label">{label}</div>
-      <div className="field-value">
-        {invalid ? (
-          <span className="val muted">Invalid TOTP secret</span>
-        ) : (
-          <>
-            <span className="val">{code ? groupDigits(code) : '…'}</span>
-            {code && <span className="totp-countdown">{remaining}s</span>}
-            <button className="iconbtn" title="Copy code" disabled={!code} onClick={() => code && void copyText(code)}>
-              ⧉
-            </button>
-          </>
-        )}
+      <Icon name={icon ?? 'lock'} className="field-icon" />
+      <button
+        type="button"
+        className="field-main"
+        title="Copy code"
+        disabled={!code}
+        onClick={() => code && copy(code)}
+      >
+        <div className="field-label">{copied ? 'Copied' : label}</div>
+        <div className="val mono">
+          {invalid ? 'Invalid TOTP secret' : code ? groupDigits(code) : '…'}
+        </div>
+      </button>
+      {!invalid && code && (
+        <span
+          className="totp-ring"
+          style={{ ['--pct' as string]: `${(remaining / TOTP_PERIOD) * 100}%` }}
+          title={`${remaining}s until refresh`}
+        >
+          <span>{remaining}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+const CUSTOM_ICONS: Record<FieldType, string> = {
+  text: 'info',
+  hidden: 'lock',
+  totp: 'lock',
+  url: 'globe',
+};
+
+function normalizeHref(url: string): string {
+  return url.includes('://') ? url : `https://${url}`;
+}
+
+function WebsitesGroup({ urls }: { urls: string[] }) {
+  return (
+    <div className="field">
+      <Icon name="globe" className="field-icon" />
+      <div className="field-main">
+        <div className="field-label">{urls.length > 1 ? 'Websites' : 'Website'}</div>
+        {urls.map((u, i) => (
+          <a key={i} className="url-link" href={normalizeHref(u)} target="_blank" rel="noopener noreferrer">
+            {u}
+          </a>
+        ))}
       </div>
     </div>
   );
@@ -154,9 +220,10 @@ export function ItemDetail({
   };
 
   const data = (detail?.content.data ?? {}) as Record<string, unknown>;
-  const fields = detail ? TYPE_FIELDS[detail.type] : [];
   const urls = (data.urls as string[] | undefined) ?? [];
-  const customFields = (data.custom_fields as Field[] | undefined) ?? [];
+  const customFields = ((data.custom_fields as Field[] | undefined) ?? []).filter((cf) => cf.value);
+  // Only the fields that actually have a value get a row (and thus a card).
+  const fields = (detail ? TYPE_FIELDS[detail.type] : []).filter((f) => (data[f.key] as string) ?? '');
 
   return (
     <div>
@@ -173,23 +240,53 @@ export function ItemDetail({
           <p className="muted">Loading…</p>
         ) : (
           <>
-            <h1>{(data.title as string) || '(untitled)'}</h1>
-            {fields.map((f) =>
-              f.totp ? (
-                <TotpRow key={f.key} label={f.label} secret={(data[f.key] as string) ?? ''} />
-              ) : (
-                <FieldRow key={f.key} label={f.label} value={(data[f.key] as string) ?? ''} secret={f.secret} />
-              ),
+            <div className="detail-head">
+              <h1>{(data.title as string) || '(untitled)'}</h1>
+              <div className="muted">{shared ? 'Shared with you' : typeLabel(detail.type)}</div>
+            </div>
+
+            {fields.length > 0 && (
+              <div className="card">
+                {fields.map((f) =>
+                  f.totp ? (
+                    <TotpRow key={f.key} icon={f.icon} label={f.label} secret={(data[f.key] as string) ?? ''} />
+                  ) : (
+                    <FieldRow
+                      key={f.key}
+                      icon={f.icon}
+                      label={f.label}
+                      value={(data[f.key] as string) ?? ''}
+                      secret={f.secret}
+                      mono={f.mono}
+                    />
+                  ),
+                )}
+              </div>
             )}
-            {urls.map((u, i) => (
-              <FieldRow key={`url-${i}`} label="URL" value={u} />
-            ))}
-            {customFields.map((cf, i) =>
-              cf.type === 'totp' ? (
-                <TotpRow key={`cf-${i}`} label={cf.label} secret={cf.value} />
-              ) : (
-                <FieldRow key={`cf-${i}`} label={cf.label} value={cf.value} secret={cf.type === 'hidden'} />
-              ),
+
+            {urls.length > 0 && (
+              <div className="card">
+                <WebsitesGroup urls={urls} />
+              </div>
+            )}
+
+            {customFields.length > 0 && (
+              <div className="card">
+                {customFields.map((cf, i) =>
+                  cf.type === 'totp' ? (
+                    <TotpRow key={`cf-${i}`} icon="lock" label={cf.label} secret={cf.value} />
+                  ) : (
+                    <FieldRow
+                      key={`cf-${i}`}
+                      icon={CUSTOM_ICONS[cf.type]}
+                      label={cf.label}
+                      value={cf.value}
+                      secret={cf.type === 'hidden'}
+                      mono={cf.type === 'hidden'}
+                    />
+                  ),
+                )}
+              </div>
             )}
 
             {detail.type === 'login' && (
