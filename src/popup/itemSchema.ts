@@ -16,15 +16,19 @@ export const ITEM_TYPES: { type: ItemType; label: string }[] = [
 export interface FieldDef {
   key: string;
   label: string;
+  /** Label to show in the editor when it differs from the display label. */
+  editLabel?: string;
   secret?: boolean;
   multiline?: boolean;
+  /** Detail view renders the live one-time code instead of the stored secret. */
+  totp?: boolean;
 }
 
 export const TYPE_FIELDS: Record<ItemType, FieldDef[]> = {
   login: [
     { key: 'username', label: 'Username' },
     { key: 'password', label: 'Password', secret: true },
-    { key: 'totp', label: 'TOTP secret', secret: true },
+    { key: 'totp', label: 'One-time code', editLabel: 'TOTP secret', secret: true, totp: true },
     { key: 'note', label: 'Note', multiline: true },
   ],
   password: [

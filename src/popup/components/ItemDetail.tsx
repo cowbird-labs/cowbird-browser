@@ -5,6 +5,7 @@ import type { Field } from '../../items/types';
 import { TYPE_FIELDS, typeLabel } from '../itemSchema';
 import { copyText, errorMessage } from '../util';
 import { getActiveTab, fillActiveTab } from '../autofill';
+import { totpNow, groupDigits } from '../totp';
 import { ItemEditor } from './ItemEditor';
 import { SharePanel } from './SharePanel';
 
@@ -25,6 +26,59 @@ function FieldRow({ label, value, secret }: { label: string; value: string; secr
         <button className="iconbtn" title="Copy" onClick={() => void copyText(value)}>
           ⧉
         </button>
+      </div>
+    </div>
+  );
+}
+
+// Renders the live one-time code derived from a stored TOTP secret rather than
+// the secret itself, refreshing every second with a countdown to the next
+// rotation. Copy yields the current digits (no spacing).
+function TotpRow({ label, secret }: { label: string; secret: string }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [remaining, setRemaining] = useState(0);
+  const [invalid, setInvalid] = useState(false);
+
+  useEffect(() => {
+    if (!secret) return;
+    let active = true;
+    const tick = async () => {
+      try {
+        const { code, remaining } = await totpNow(secret);
+        if (!active) return;
+        setCode(code);
+        setRemaining(remaining);
+        setInvalid(false);
+      } catch {
+        if (!active) return;
+        setInvalid(true);
+        setCode(null);
+      }
+    };
+    void tick();
+    const id = setInterval(() => void tick(), 1000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [secret]);
+
+  if (!secret) return null;
+  return (
+    <div className="field">
+      <div className="field-label">{label}</div>
+      <div className="field-value">
+        {invalid ? (
+          <span className="val muted">Invalid TOTP secret</span>
+        ) : (
+          <>
+            <span className="val">{code ? groupDigits(code) : '…'}</span>
+            {code && <span className="totp-countdown">{remaining}s</span>}
+            <button className="iconbtn" title="Copy code" disabled={!code} onClick={() => code && void copyText(code)}>
+              ⧉
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -120,20 +174,23 @@ export function ItemDetail({
         ) : (
           <>
             <h1>{(data.title as string) || '(untitled)'}</h1>
-            {fields.map((f) => (
-              <FieldRow key={f.key} label={f.label} value={(data[f.key] as string) ?? ''} secret={f.secret} />
-            ))}
+            {fields.map((f) =>
+              f.totp ? (
+                <TotpRow key={f.key} label={f.label} secret={(data[f.key] as string) ?? ''} />
+              ) : (
+                <FieldRow key={f.key} label={f.label} value={(data[f.key] as string) ?? ''} secret={f.secret} />
+              ),
+            )}
             {urls.map((u, i) => (
               <FieldRow key={`url-${i}`} label="URL" value={u} />
             ))}
-            {customFields.map((cf, i) => (
-              <FieldRow
-                key={`cf-${i}`}
-                label={cf.label}
-                value={cf.value}
-                secret={cf.type === 'hidden' || cf.type === 'totp'}
-              />
-            ))}
+            {customFields.map((cf, i) =>
+              cf.type === 'totp' ? (
+                <TotpRow key={`cf-${i}`} label={cf.label} secret={cf.value} />
+              ) : (
+                <FieldRow key={`cf-${i}`} label={cf.label} value={cf.value} secret={cf.type === 'hidden'} />
+              ),
+            )}
 
             {detail.type === 'login' && (
               <div className="actions">

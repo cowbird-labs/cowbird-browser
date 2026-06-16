@@ -15,3 +15,14 @@ export interface DetectResponse {
 export interface FillResponse {
   filled: boolean;
 }
+
+// Control messages sent from the content script to the background worker (via
+// runtime.sendMessage, distinct from the popup<->worker RPC, which carries a
+// `method` field rather than a `type`). Used for the in-field autofill icon,
+// which asks the worker to open the toolbar popup. No page or item data crosses
+// this channel.
+export type BackgroundMessage = { type: 'cowbird:openPopup' };
+
+export interface OpenPopupResponse {
+  opened: boolean;
+}

@@ -110,7 +110,7 @@ export function ItemEditor({
 
         {fields.map((f) => (
           <div key={f.key}>
-            <label htmlFor={f.key}>{f.label}</label>
+            <label htmlFor={f.key}>{f.editLabel ?? f.label}</label>
             {f.multiline ? (
               <textarea
                 id={f.key}

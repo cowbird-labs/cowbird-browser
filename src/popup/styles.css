@@ -7,6 +7,29 @@
   --border: #d9d9de;
   --danger: #c92a2a;
   --card: #fff;
+  --hover: #eef1fb;
+  --badge-bg: #e7ebfb;
+  --badge-fg: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1b1d;
+    --fg: #e6e6ea;
+    --muted: #9a9aa2;
+    --accent: #6b8afd;
+    --accent-fg: #fff;
+    --border: #3a3a3f;
+    --danger: #ff7a7a;
+    --card: #262629;
+    --hover: #2f3340;
+    --badge-bg: #2a3354;
+    --badge-fg: #9db0ff;
+  }
+}
+
+:root {
+  color-scheme: light dark;
 }
 
 * {
@@ -163,7 +186,7 @@ button:disabled {
 }
 
 .list li button:hover {
-  background: #eef1fb;
+  background: var(--hover);
 }
 
 .item-title {
@@ -179,8 +202,8 @@ button:disabled {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  background: #e7ebfb;
-  color: var(--accent);
+  background: var(--badge-bg);
+  color: var(--badge-fg);
   border-radius: 4px;
   padding: 1px 5px;
   margin-left: 6px;
@@ -224,8 +247,16 @@ button:disabled {
 }
 
 .current-site {
-  background: #eef1fb;
+  background: var(--hover);
   border-bottom: 1px solid var(--border);
+}
+
+.totp-countdown {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 28px;
+  text-align: right;
 }
 
 .current-site-head {
