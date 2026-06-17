@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { rpc } from '../messaging/rpc';
+import { rpc, setReauthHandler } from '../messaging/rpc';
 import type { StateInfo } from '../messaging/protocol';
 import { errorMessage } from './util';
 import { ConfigForm } from './components/ConfigForm';
@@ -22,6 +22,13 @@ export function App() {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  // When any RPC reports the session expired, re-fetch state so the router lands
+  // on the re-auth screen rather than leaving a dead error in place.
+  useEffect(() => {
+    setReauthHandler(() => void refresh());
+    return () => setReauthHandler(null);
   }, [refresh]);
 
   const onState = (s: StateInfo) => {
@@ -58,6 +65,15 @@ export function App() {
   switch (state.phase) {
     case 'needs-connect':
       return <ConnectForm state={state} onDone={onState} onReconfigure={() => setReconfigure(true)} />;
+    case 'needs-reauth':
+      return (
+        <ConnectForm
+          state={state}
+          onDone={onState}
+          onReconfigure={() => setReconfigure(true)}
+          expired
+        />
+      );
     case 'locked':
       return <UnlockForm state={state} onDone={onState} />;
     case 'unlocked':

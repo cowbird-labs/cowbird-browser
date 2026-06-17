@@ -31,7 +31,7 @@ function isTextLike(input: HTMLInputElement): boolean {
   return type === 'text' || type === 'email' || type === 'tel' || type === '';
 }
 
-function visiblePasswordFields(): HTMLInputElement[] {
+export function visiblePasswordFields(): HTMLInputElement[] {
   return deepQueryAll<HTMLInputElement>('input[type="password"]').filter(isVisible);
 }
 
@@ -53,7 +53,7 @@ function usernameScore(input: HTMLInputElement): number {
   return score;
 }
 
-function findUsernameField(pw: HTMLInputElement): HTMLInputElement | null {
+export function findUsernameField(pw: HTMLInputElement): HTMLInputElement | null {
   // Scope to the password's own form when it has one; otherwise search the whole
   // document (piercing shadow roots), since shadow-DOM inputs often aren't
   // form-associated across the boundary.

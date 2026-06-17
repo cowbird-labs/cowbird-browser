@@ -21,6 +21,20 @@ export function isStatus(err: unknown, status: number): boolean {
   return err instanceof VaultResponseError && err.statusCode === status;
 }
 
+/**
+ * isInvalidToken reports whether err is a Vault rejection caused by an expired or
+ * invalid token (Vault answers 403 with errors like "permission denied" +
+ * "invalid token"). Deliberately keys on the "invalid token" text rather than a
+ * bare 403 so a genuine policy denial isn't mistaken for an expired session.
+ */
+export function isInvalidToken(err: unknown): boolean {
+  return (
+    err instanceof VaultResponseError &&
+    (err.statusCode === 401 || err.statusCode === 403) &&
+    err.errors.some((e) => /invalid token/i.test(e))
+  );
+}
+
 export class VaultHttp {
   /** Session token; set by the auth flow, sent as X-Vault-Token. */
   token = '';

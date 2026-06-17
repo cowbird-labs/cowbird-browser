@@ -18,6 +18,9 @@ import type { Phase, StateInfo } from '../messaging/protocol';
 const CONFIG_KEY = 'config';
 const SESSION_KEY = 'session';
 const IDENTITY_KEY = 'identity';
+// Set when the Vault token is known-dead and silent renewal failed, so the popup
+// routes to a re-auth screen. Lives in session memory alongside the token.
+const TOKEN_INVALID_KEY = 'tokenInvalid';
 
 interface SessionRecord {
   token: string;
@@ -57,6 +60,19 @@ export async function setSession(record: SessionRecord): Promise<void> {
   await sessionStore.set({ [SESSION_KEY]: record });
 }
 
+export async function getTokenInvalid(): Promise<boolean> {
+  const r = await sessionStore.get(TOKEN_INVALID_KEY);
+  return r[TOKEN_INVALID_KEY] === true;
+}
+
+export async function setTokenInvalid(): Promise<void> {
+  await sessionStore.set({ [TOKEN_INVALID_KEY]: true });
+}
+
+export async function clearTokenInvalid(): Promise<void> {
+  await sessionStore.remove(TOKEN_INVALID_KEY);
+}
+
 async function getIdentityRecord(): Promise<IdentityRecord | null> {
   const r = await sessionStore.get(IDENTITY_KEY);
   return (r[IDENTITY_KEY] as IdentityRecord | undefined) ?? null;
@@ -75,7 +91,7 @@ export async function clearIdentity(): Promise<void> {
 }
 
 export async function disconnect(): Promise<void> {
-  await sessionStore.remove([SESSION_KEY, IDENTITY_KEY]);
+  await sessionStore.remove([SESSION_KEY, IDENTITY_KEY, TOKEN_INVALID_KEY]);
 }
 
 /** buildSession reconstructs a live VaultSession from config + the stored record. */
@@ -114,6 +130,9 @@ export async function requireApp(): Promise<App> {
 async function currentPhase(): Promise<Phase> {
   if (!(await loadConfig())) return 'needs-config';
   if (!(await getSession())) return 'needs-connect';
+  // A dead token outranks 'locked': unlocking itself reads from Vault, so the
+  // user must refresh the session before they can unlock.
+  if (await getTokenInvalid()) return 'needs-reauth';
   if (!(await getIdentityRecord())) return 'locked';
   return 'unlocked';
 }

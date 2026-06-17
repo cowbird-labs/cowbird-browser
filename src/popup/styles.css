@@ -6,6 +6,7 @@
   --accent-fg: #fff;
   --border: #d9d9de;
   --danger: #c92a2a;
+  --warn: #9a6700;
   --card: #fff;
   --hover: #eef1fb;
   --badge-bg: #e7ebfb;
@@ -21,6 +22,7 @@
     --accent-fg: #fff;
     --border: #3a3a3f;
     --danger: #ff7a7a;
+    --warn: #e3b341;
     --card: #262629;
     --hover: #2f3340;
     --badge-bg: #2a3354;
@@ -145,6 +147,21 @@ button:disabled {
 .muted {
   color: var(--muted);
   font-size: 12px;
+}
+
+/* Inline, low-key warning (e.g. a Vault address with no port). Catches the eye
+   without blocking: a small amber icon + short text under the field. */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warn);
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+.notice svg {
+  flex: 0 0 auto;
 }
 
 .topbar {

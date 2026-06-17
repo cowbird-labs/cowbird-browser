@@ -1,10 +1,5 @@
 export type { VaultConfig } from './config';
-export {
-  connectVault,
-  verifyMount,
-  renewSession,
-  type VaultSession,
-} from './session';
+export { connectVault, verifyMount, type VaultSession } from './session';
 export {
   initIdentity,
   changePassword,

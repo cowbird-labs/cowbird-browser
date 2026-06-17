@@ -5,8 +5,8 @@ import { VaultStore } from '../vault/store';
 import type { VaultConfig } from './config';
 
 // Mirrors vault.NewVault, minus the desktop keyring and the background renewal
-// goroutine. Token renewal scheduling belongs to the MV3 background worker
-// (chrome.alarms); this module exposes renewSession for it to call.
+// goroutine. Token renewal lives in the background worker (src/background/reauth.ts),
+// which refreshes the token reactively when a Vault call reports it expired.
 
 export interface VaultSession {
   http: VaultHttp;
@@ -44,16 +44,4 @@ export async function connectVault(
  */
 export async function verifyMount(session: VaultSession): Promise<void> {
   await session.store.kv.list(`users/${session.entityID}`);
-}
-
-/** renewSession extends the token in place; the background worker calls this. */
-export async function renewSession(
-  session: VaultSession,
-  method: AuthMethod,
-  values: Record<string, string>,
-): Promise<void> {
-  const result = await method.renew(session.http, session.token, values);
-  session.http.token = result.token;
-  session.token = result.token;
-  if (result.entityID) session.entityID = result.entityID;
 }

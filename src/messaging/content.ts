@@ -28,7 +28,15 @@ export type BackgroundMessage =
   | { type: 'cowbird:openPopup' }
   | { type: 'cowbird:matches' }
   | { type: 'cowbird:fillItem'; id: string }
-  | { type: 'cowbird:fillCode'; id: string };
+  | { type: 'cowbird:fillCode'; id: string }
+  | { type: 'cowbird:saveDecision'; username: string; password: string }
+  | {
+      type: 'cowbird:saveCredential';
+      action: 'save' | 'update';
+      id?: string;
+      username: string;
+      password: string;
+    };
 
 export interface OpenPopupResponse {
   opened: boolean;
@@ -56,3 +64,19 @@ export type FillItemResponse =
 // The current one-time code for a login (generated in the worker from the stored
 // secret; only the ephemeral code crosses to the page).
 export type FillCodeResponse = { code: string } | { error: string };
+
+// --- Save / update credential offer -------------------------------------------
+// The content script captures a freshly-submitted username/password and asks the
+// worker what to offer. The password crosses page → worker here (the reverse of
+// fill): it's the user's own typed credential, and the worker remains the only
+// side that decrypts/compares and writes to Vault. Host is derived from the
+// sender frame by the worker, never supplied by the page.
+
+/** What an offered save should do, decided by the worker for the sender's host. */
+export type SaveDecisionResponse =
+  | { kind: 'locked' } // vault locked / not connected — offer "unlock to save"
+  | { kind: 'none' } // an identical login already exists — no offer
+  | { kind: 'save' } // no matching login — offer to create one
+  | { kind: 'update'; id: string; title: string }; // matching login, changed password
+
+export type SaveCredentialResponse = { ok: true } | { error: string };

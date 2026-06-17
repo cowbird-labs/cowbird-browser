@@ -6,7 +6,7 @@ import type { Content, ItemType } from '../items/types';
 // All payloads are JSON-serializable: the worker holds the keys and returns only
 // already-decrypted, plain data to the (same-origin, trusted) extension UI.
 
-export type Phase = 'needs-config' | 'needs-connect' | 'locked' | 'unlocked';
+export type Phase = 'needs-config' | 'needs-connect' | 'needs-reauth' | 'locked' | 'unlocked';
 
 export interface StateInfo {
   phase: Phase;
@@ -96,7 +96,7 @@ export interface RpcRequest {
 
 export type RpcResponse =
   | { ok: true; result: unknown }
-  | { ok: false; error: string };
+  | { ok: false; error: string; reauth?: true };
 
 export type { VaultConfig } from '../core/config';
 export type { Content, ItemType } from '../items/types';

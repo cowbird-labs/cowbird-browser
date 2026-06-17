@@ -1,7 +1,8 @@
 import browser from 'webextension-polyfill';
 import type { Runtime } from 'webextension-polyfill';
 import { initCrypto } from '../crypto/sodium';
-import { dispatch, matchesForHost, credsForItem, codeForItem } from './handlers';
+import { dispatch, matchesForHost, credsForItem, codeForItem, decideSave, saveCredential } from './handlers';
+import { withReauth, ReauthRequired } from './reauth';
 import type { RpcRequest, RpcResponse } from '../messaging/protocol';
 import type {
   BackgroundMessage,
@@ -9,6 +10,8 @@ import type {
   MatchesResponse,
   FillItemResponse,
   FillCodeResponse,
+  SaveDecisionResponse,
+  SaveCredentialResponse,
 } from '../messaging/content';
 
 // The background worker owns all key material and Vault access; the popup never
@@ -23,7 +26,13 @@ export function startBackground(): void {
       message: unknown,
       sender: Runtime.MessageSender,
     ): Promise<
-      RpcResponse | OpenPopupResponse | MatchesResponse | FillItemResponse | FillCodeResponse
+      | RpcResponse
+      | OpenPopupResponse
+      | MatchesResponse
+      | FillItemResponse
+      | FillCodeResponse
+      | SaveDecisionResponse
+      | SaveCredentialResponse
     > => {
       // Control messages from the content script carry a `type`; popup RPC
       // requests carry a `method`.
@@ -37,14 +46,21 @@ export function startBackground(): void {
           return handleFillItem(ready, sender, ctrl.id);
         case 'cowbird:fillCode':
           return handleFillCode(ready, sender, ctrl.id);
+        case 'cowbird:saveDecision':
+          return handleSaveDecision(ready, sender, ctrl.username, ctrl.password);
+        case 'cowbird:saveCredential':
+          return handleSaveCredential(ready, sender, ctrl);
       }
       const req = message as RpcRequest;
       return (async (): Promise<RpcResponse> => {
         await ready;
         try {
-          const result = await dispatch(req.method, req.params);
+          const result = await withReauth(() => dispatch(req.method, req.params));
           return { ok: true, result };
         } catch (err) {
+          if (err instanceof ReauthRequired) {
+            return { ok: false, error: 'Your Vault session expired. Sign in again.', reauth: true };
+          }
           return { ok: false, error: err instanceof Error ? err.message : String(err) };
         }
       })();
@@ -64,6 +80,18 @@ function senderHost(sender: Runtime.MessageSender): string | null {
   }
 }
 
+// senderOrigin derives the requesting frame's origin (scheme://host[:port]),
+// stored as a new login's URL so it later autofills on the same site. Null for
+// non-tab senders, mirroring senderHost.
+function senderOrigin(sender: Runtime.MessageSender): string | null {
+  if (!sender.tab?.id) return null;
+  try {
+    return new URL(sender.url ?? sender.tab.url ?? '').origin || null;
+  } catch {
+    return null;
+  }
+}
+
 async function handleMatches(
   ready: Promise<unknown>,
   sender: Runtime.MessageSender,
@@ -72,7 +100,7 @@ async function handleMatches(
   const host = senderHost(sender);
   if (!host) return { locked: false, matches: [] };
   try {
-    return await matchesForHost(host);
+    return await withReauth(() => matchesForHost(host));
   } catch {
     return { locked: true, matches: [] };
   }
@@ -87,7 +115,7 @@ async function handleFillItem(
   const host = senderHost(sender);
   if (!host) return { error: 'no host' };
   try {
-    return await credsForItem(id, host);
+    return await withReauth(() => credsForItem(id, host));
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
@@ -102,7 +130,43 @@ async function handleFillCode(
   const host = senderHost(sender);
   if (!host) return { error: 'no host' };
   try {
-    return await codeForItem(id, host);
+    return await withReauth(() => codeForItem(id, host));
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function handleSaveDecision(
+  ready: Promise<unknown>,
+  sender: Runtime.MessageSender,
+  username: string,
+  password: string,
+): Promise<SaveDecisionResponse> {
+  await ready;
+  const host = senderHost(sender);
+  if (!host) return { kind: 'none' };
+  try {
+    return await withReauth(() => decideSave(host, username, password));
+  } catch {
+    // requireApp throws when locked / not connected — offer to unlock.
+    return { kind: 'locked' };
+  }
+}
+
+async function handleSaveCredential(
+  ready: Promise<unknown>,
+  sender: Runtime.MessageSender,
+  ctrl: { action: 'save' | 'update'; id?: string; username: string; password: string },
+): Promise<SaveCredentialResponse> {
+  await ready;
+  const host = senderHost(sender);
+  const origin = senderOrigin(sender);
+  if (!host || !origin) return { error: 'no host' };
+  try {
+    await withReauth(() =>
+      saveCredential(origin, host, ctrl.action, ctrl.id, ctrl.username, ctrl.password),
+    );
+    return { ok: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }

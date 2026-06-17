@@ -46,8 +46,12 @@ export default defineConfig({
       gecko: {
         id: 'cowbird@avitac.co',
         strict_min_version: '142.0',
+        // websiteContent: autofill reads page structure/field hints. authenticationInfo:
+        // the save-credential flow captures passwords/usernames typed into page forms
+        // (and the manager stores logins generally) — Mozilla treats credentials as a
+        // distinct sensitive category from generic page content, so declare both.
         data_collection_permissions: {
-          required: ['websiteContent'],
+          required: ['websiteContent', 'authenticationInfo'],
           optional: [],
         },
       },

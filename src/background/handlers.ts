@@ -1,6 +1,7 @@
 import { utf8, b64encode } from '../crypto/b64';
 import { methods, methodById } from '../auth/index';
 import { connectVault, verifyMount } from '../core/session';
+import { normalizeAddress } from '../core/config';
 import {
   initIdentity,
   changePassword,
@@ -8,7 +9,8 @@ import {
   importIdentity,
 } from '../core/identity';
 import { rotateKey, rotationCompleter } from '../core/rotation';
-import { hostMatches } from '../autofill/match';
+import { hostMatches, classifySubmission } from '../autofill/match';
+import type { HostLogin, SaveClass } from '../autofill/match';
 import { totpCode } from '../items/totp';
 import type { Content } from '../items/types';
 import type { MatchSummary } from '../messaging/content';
@@ -34,6 +36,7 @@ import {
   setSession,
   stateInfo,
   storeConfig,
+  clearTokenInvalid,
 } from './state';
 
 // summary projects a decrypted item to a list row, pulling out only the fields
@@ -58,7 +61,9 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
   },
 
   async saveConfig(config) {
-    await storeConfig(config);
+    // Canonicalize the address (default scheme to https, trim trailing slashes)
+    // so a scheme-less entry actually connects rather than being misparsed.
+    await storeConfig({ ...config, address: normalizeAddress(config.address) });
     return stateInfo();
   },
 
@@ -78,6 +83,9 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
       displayName: session.displayName,
       authValues: values,
     });
+    // A fresh login clears any prior token-expired state; this same handler backs
+    // both first connect and the re-auth screen.
+    await clearTokenInvalid();
     return stateInfo();
   },
 
@@ -316,6 +324,78 @@ export async function codeForItem(id: string, host: string): Promise<{ code: str
   if (!content.data.totp) throw new Error('no TOTP secret');
   const { code } = await totpCode(content.data.totp);
   return { code };
+}
+
+// hostLogins returns the user's own login items whose URLs match `host`,
+// decrypted. Shared with the save-decision flow.
+async function hostLogins(host: string): Promise<HostLogin[]> {
+  const app = await requireApp();
+  const out: HostLogin[] = [];
+  for (const env of await app.service.listItems()) {
+    try {
+      const content = await app.service.openOwnItem(env);
+      if (content.kind !== 'login') continue;
+      const urls = content.data.urls ?? [];
+      if (urls.some((u) => hostMatches(u, host))) {
+        out.push({
+          id: env.id,
+          title: content.data.title,
+          username: content.data.username ?? '',
+          password: content.data.password ?? '',
+        });
+      }
+    } catch {
+      // Skip items that fail to decrypt.
+    }
+  }
+  return out;
+}
+
+/**
+ * decideSave inspects a freshly-submitted credential against the host's existing
+ * logins and reports whether to offer a save, an update, or nothing. Throws when
+ * the vault is locked / not connected (the caller maps that to a "locked" offer).
+ */
+export async function decideSave(
+  host: string,
+  username: string,
+  password: string,
+): Promise<SaveClass> {
+  return classifySubmission(await hostLogins(host), username, password);
+}
+
+/**
+ * saveCredential persists a captured credential. `save` creates a new login
+ * titled after the host with the page's origin as its URL; `update` changes the
+ * password (and fills an empty username) on an existing login, after re-checking
+ * that the item's URL still matches the sender's host. Host/origin are derived
+ * from the sender frame, never supplied by the page.
+ */
+export async function saveCredential(
+  origin: string,
+  host: string,
+  action: 'save' | 'update',
+  id: string | undefined,
+  username: string,
+  password: string,
+): Promise<void> {
+  const app = await requireApp();
+  if (action === 'save') {
+    await app.service.createItem({
+      kind: 'login',
+      data: { title: host, username, password, urls: [origin] },
+    });
+    return;
+  }
+  if (!id) throw new Error('update requires an item id');
+  const env = await app.session.store.getItem(id);
+  const content = await app.service.openOwnItem(env);
+  if (content.kind !== 'login') throw new Error('not a login item');
+  const urls = content.data.urls ?? [];
+  if (!urls.some((u) => hostMatches(u, host))) throw new Error('item does not match host');
+  content.data.password = password;
+  if (!content.data.username?.trim()) content.data.username = username;
+  await app.service.updateItem(id, content);
 }
 
 /** dispatch routes a decoded RPC request to its handler. */
