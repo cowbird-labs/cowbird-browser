@@ -1,18 +1,33 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { rpc } from '../../messaging/rpc';
-import type { StateInfo } from '../../messaging/protocol';
+import type { StateInfo, TransferFormat } from '../../messaging/protocol';
 import { errorMessage } from '../util';
 
 function downloadBase64(fileBase64: string, filename: string): void {
   const bin = atob(fileBase64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/json' }));
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// readAsBase64 reads a picked file and returns its contents base64-encoded, for
+// handing the raw bytes to the worker over the JSON RPC channel.
+function readAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const res = r.result as string; // data: URL
+      const comma = res.indexOf(',');
+      resolve(comma >= 0 ? res.slice(comma + 1) : res);
+    };
+    r.onerror = () => reject(r.error ?? new Error('file read failed'));
+    r.readAsDataURL(file);
+  });
 }
 
 export function Settings({
@@ -31,9 +46,24 @@ export function Settings({
   const [newPassword, setNewPassword] = useState('');
   // rotate key
   const [rotatePassword, setRotatePassword] = useState('');
-  // export
+  // export recovery file
   const [exportUnlock, setExportUnlock] = useState('');
   const [exportPassphrase, setExportPassphrase] = useState('');
+  // item import/export
+  const [formats, setFormats] = useState<TransferFormat[]>([]);
+  const [format, setFormat] = useState('cowbird');
+  const importInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { formats } = await rpc('listFormats');
+        setFormats(formats);
+      } catch {
+        // Format list is non-critical; the section just won't render.
+      }
+    })();
+  }, []);
 
   const run = async (fn: () => Promise<void>) => {
     setError(null);
@@ -78,6 +108,49 @@ export function Settings({
       setNotice('Recovery file downloaded. Store it somewhere safe.');
     });
 
+  const formatName = (id: string) => formats.find((f) => f.id === id)?.name ?? id;
+
+  const doExportItems = () =>
+    run(async () => {
+      if (
+        !confirm(
+          `Export your items as ${formatName(format)}?\n\n` +
+            'The file will contain your passwords and secrets IN CLEAR TEXT — it is ' +
+            'not encrypted or passphrase-protected. Store or delete it carefully.',
+        )
+      ) {
+        return;
+      }
+      const { fileBase64, filename } = await rpc('exportItems', { format });
+      downloadBase64(fileBase64, filename);
+      setNotice(`Exported items to ${filename}.`);
+    });
+
+  const onImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file
+    if (!file) return;
+    void run(async () => {
+      const dataBase64 = await readAsBase64(file);
+      const { imported, skipped } = await rpc('importItems', { format, dataBase64 });
+      setNotice(`Imported ${imported} item(s)${skipped ? `, skipped ${skipped}` : ''}.`);
+    });
+  };
+
+  const doRemoveDuplicates = () =>
+    run(async () => {
+      const { count } = await rpc('removeDuplicates', { dryRun: true });
+      if (count === 0) {
+        setNotice('No duplicate items found.');
+        return;
+      }
+      if (!confirm(`Found ${count} duplicate item(s). Remove them, keeping one of each?`)) {
+        return;
+      }
+      const { count: removed } = await rpc('removeDuplicates', { dryRun: false });
+      setNotice(`Removed ${removed} duplicate item(s).`);
+    });
+
   const lock = () => run(async () => onState(await rpc('lock')));
   const disconnect = () => run(async () => onState(await rpc('disconnect')));
 
@@ -114,6 +187,41 @@ export function Settings({
         <div className="actions">
           <button disabled={busy || !exportUnlock || !exportPassphrase} onClick={() => void doExport()}>
             Download recovery file
+          </button>
+        </div>
+
+        <h2>Import / export items</h2>
+        <p className="muted">
+          Move items in and out in bulk. Exported files are <strong>unencrypted</strong> plain text.
+        </p>
+        <label htmlFor="fmt">Format</label>
+        <select id="fmt" value={format} onChange={(e) => setFormat(e.target.value)}>
+          {formats.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+        <input
+          ref={importInput}
+          type="file"
+          style={{ display: 'none' }}
+          onChange={onImportFile}
+        />
+        <div className="actions">
+          <button disabled={busy || !formats.length} onClick={() => void doExportItems()}>
+            Export items
+          </button>
+          <button disabled={busy || !formats.length} onClick={() => importInput.current?.click()}>
+            Import items
+          </button>
+        </div>
+
+        <h2>Remove duplicates</h2>
+        <p className="muted">Find owned items with identical contents and keep one of each.</p>
+        <div className="actions">
+          <button disabled={busy} onClick={() => void doRemoveDuplicates()}>
+            Remove duplicate items
           </button>
         </div>
 

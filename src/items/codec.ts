@@ -19,7 +19,15 @@ export function encode(content: Content): Uint8Array {
 
 /** decode parses a {type, data} envelope back into a tagged Content value. */
 export function decode(bytes: Uint8Array): Content {
-  const env = JSON.parse(fromUtf8(bytes)) as ContentEnvelope;
+  return contentFromEnvelope(JSON.parse(fromUtf8(bytes)) as ContentEnvelope);
+}
+
+/**
+ * contentFromEnvelope validates an already-parsed {type, data} object and tags
+ * it as a Content value. Shared by decode (from bytes) and the export/transfer
+ * codecs (which parse the surrounding document first).
+ */
+export function contentFromEnvelope(env: { type: unknown; data: unknown }): Content {
   switch (env.type) {
     case 'login':
     case 'card':

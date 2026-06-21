@@ -4,6 +4,7 @@ import type { ItemDetail } from '../../messaging/protocol';
 import type { Content, Field, FieldType, ItemType } from '../../items/types';
 import { ITEM_TYPES, TYPE_FIELDS } from '../itemSchema';
 import { errorMessage } from '../util';
+import { Generator } from './Generator';
 
 const FIELD_TYPES: FieldType[] = ['text', 'hidden', 'totp', 'url'];
 
@@ -32,6 +33,8 @@ export function ItemEditor({
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // When set, the inline generator is open for this field key.
+  const [genFor, setGenFor] = useState<string | null>(null);
 
   const fields = TYPE_FIELDS[type];
 
@@ -82,6 +85,19 @@ export function ItemEditor({
     }
   };
 
+  if (genFor) {
+    const key = genFor;
+    return (
+      <Generator
+        onUse={(v) => {
+          setValues((prev) => ({ ...prev, [key]: v }));
+          setGenFor(null);
+        }}
+        onClose={() => setGenFor(null)}
+      />
+    );
+  }
+
   return (
     <div>
       <div className="topbar">
@@ -124,6 +140,11 @@ export function ItemEditor({
                 value={values[f.key] ?? ''}
                 onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
               />
+            )}
+            {f.key === 'password' && (
+              <button type="button" className="link" onClick={() => setGenFor(f.key)}>
+                ⟳ Generate
+              </button>
             )}
           </div>
         ))}

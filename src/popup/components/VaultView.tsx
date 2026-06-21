@@ -7,11 +7,13 @@ import { ItemList } from './ItemList';
 import { ItemDetail } from './ItemDetail';
 import { ItemEditor } from './ItemEditor';
 import { Settings } from './Settings';
+import { Generator } from './Generator';
 
 type View =
   | { kind: 'list' }
   | { kind: 'detail'; id: string; shared: boolean }
   | { kind: 'new' }
+  | { kind: 'generator' }
   | { kind: 'settings' };
 
 export function VaultView({
@@ -50,6 +52,9 @@ export function VaultView({
   if (view.kind === 'new') {
     return <ItemEditor onCancel={() => setView({ kind: 'list' })} onSaved={backToList} />;
   }
+  if (view.kind === 'generator') {
+    return <Generator onClose={() => setView({ kind: 'list' })} />;
+  }
   if (view.kind === 'detail') {
     return (
       <ItemDetail id={view.id} shared={view.shared} onBack={backToList} afterChange={() => void loadItems()} />
@@ -70,6 +75,13 @@ export function VaultView({
           </button>
           <button className="iconbtn" title="Add item" onClick={() => setView({ kind: 'new' })}>
             ＋
+          </button>
+          <button
+            className="iconbtn"
+            title="Password generator"
+            onClick={() => setView({ kind: 'generator' })}
+          >
+            🎲
           </button>
           <button className="iconbtn" title="Settings" onClick={() => setView({ kind: 'settings' })}>
             ⚙

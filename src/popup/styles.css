@@ -168,6 +168,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
@@ -177,10 +178,21 @@ button:disabled {
 
 .topbar .title {
   font-weight: 600;
+  /* Let the title give way (and ellipsize) before the action buttons do, so a
+     crowded toolbar never widens the popup past its fixed width. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The button cluster keeps its size; only the title shrinks. */
+.topbar .row {
+  flex: 0 0 auto;
 }
 
 .iconbtn {
-  padding: 4px 8px;
+  padding: 4px 6px;
 }
 
 .list {
@@ -364,6 +376,9 @@ button.field-main {
 }
 
 .search {
+  /* Inputs are width:100% globally; the 12px side margins would push this to
+     360 + 24px and overflow the popup, so subtract the margins from the width. */
+  width: calc(100% - 24px);
   margin: 10px 12px;
 }
 
@@ -381,4 +396,50 @@ button.field-main {
 
 .current-site-head {
   padding: 8px 12px 0;
+}
+
+/* Password generator */
+.gen-output {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.gen-value {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.gen-modes {
+  margin: 12px 0;
+}
+
+.gen-modes button {
+  flex: 1;
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: normal;
+  margin: 6px 0;
+}
+
+label.check input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}
+
+input[type='range'] {
+  width: 100%;
 }

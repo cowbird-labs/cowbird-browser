@@ -1,4 +1,4 @@
-import { utf8, b64encode } from '../crypto/b64';
+import { utf8, b64encode, b64decode } from '../crypto/b64';
 import { methods, methodById } from '../auth/index';
 import { connectVault, verifyMount } from '../core/session';
 import { normalizeAddress } from '../core/config';
@@ -9,6 +9,8 @@ import {
   importIdentity,
 } from '../core/identity';
 import { rotateKey, rotationCompleter } from '../core/rotation';
+import { exportItems, importItems, removeDuplicateItems } from '../core/transfer';
+import { allCodecs, getCodec } from '../transfer/index';
 import { hostMatches, classifySubmission } from '../autofill/match';
 import type { HostLogin, SaveClass } from '../autofill/match';
 import { totpCode } from '../items/totp';
@@ -247,6 +249,33 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
     );
     await setIdentity(identity);
     return stateInfo();
+  },
+
+  async listFormats() {
+    return {
+      formats: allCodecs().map((c) => ({ id: c.id, name: c.name, extension: c.extension })),
+    };
+  },
+
+  async exportItems({ format }) {
+    const app = await requireApp();
+    const codec = getCodec(format);
+    if (!codec) throw new Error(`unknown export format ${format}`);
+    const bytes = await exportItems(app, codec);
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return { fileBase64: b64encode(bytes), filename: `cowbird-export-${stamp}${codec.extension}` };
+  },
+
+  async importItems({ format, dataBase64 }) {
+    const app = await requireApp();
+    const codec = getCodec(format);
+    if (!codec) throw new Error(`unknown import format ${format}`);
+    return importItems(app, codec, b64decode(dataBase64));
+  },
+
+  async removeDuplicates({ dryRun }) {
+    const app = await requireApp();
+    return { count: await removeDuplicateItems(app, dryRun) };
   },
 };
 

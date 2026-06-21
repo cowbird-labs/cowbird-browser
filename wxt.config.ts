@@ -1,5 +1,6 @@
 import { defineConfig } from 'wxt';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 // wxt builds the extension for both Chrome and Firefox MV3 from one source,
 // handling the background (service worker vs event page) and manifest
@@ -10,8 +11,16 @@ const require = createRequire(import.meta.url);
 // Alias the broken ESM build of libsodium-wrappers-sumo to its CJS entry (the
 // same fix used in vitest.config.ts); Vite bundles the CJS with embedded WASM.
 const sodiumCjs = require.resolve('libsodium-wrappers-sumo');
+// totp-generator has a `require('node:crypto')` Node fallback that is never taken
+// in the browser; alias it to a Web Crypto stub so the bundler doesn't externalize
+// a Node builtin (and warn) — see src/shims/node-crypto.ts.
+const nodeCryptoShim = fileURLToPath(new URL('./src/shims/node-crypto.ts', import.meta.url));
 
 export default defineConfig({
+  // @vitejs/plugin-react v6 (pulled in by @wxt-dev/module-react) auto-detects
+  // wxt's Vite 8 / Rolldown and uses the oxc transform, avoiding the
+  // `esbuild`/`optimizeDeps.esbuildOptions` deprecation warnings the older
+  // babel-based v4 plugin emitted under Vite 8.
   modules: ['@wxt-dev/module-react'],
   // AMO data-collection consent is irrelevant for locally loaded dev builds.
   suppressWarnings: { firefoxDataCollection: true },
@@ -61,6 +70,7 @@ export default defineConfig({
     resolve: {
       alias: {
         'libsodium-wrappers-sumo': sodiumCjs,
+        'node:crypto': nodeCryptoShim,
       },
     },
   }),

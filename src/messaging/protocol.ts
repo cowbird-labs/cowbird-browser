@@ -52,6 +52,13 @@ export interface DirectoryEntry {
   isSelf: boolean;
 }
 
+/** A selectable import/export file format (one transfer codec). */
+export interface TransferFormat {
+  id: string;
+  name: string;
+  extension: string;
+}
+
 /** The full set of operations the worker exposes. Keys are method names. */
 export interface Api {
   getState(): StateInfo;
@@ -82,6 +89,11 @@ export interface Api {
     newPassword: string;
     force: boolean;
   }): StateInfo;
+
+  listFormats(): { formats: TransferFormat[] };
+  exportItems(args: { format: string }): { fileBase64: string; filename: string };
+  importItems(args: { format: string; dataBase64: string }): { imported: number; skipped: number };
+  removeDuplicates(args: { dryRun: boolean }): { count: number };
 }
 
 export type Method = keyof Api;
