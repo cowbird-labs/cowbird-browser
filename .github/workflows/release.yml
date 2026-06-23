@@ -1,0 +1,81 @@
+name: Release
+
+# Build the Chrome and Firefox extension packages (plus the AMO source package)
+# and publish them to the GitHub release for the pushed tag.
+#
+# Immutability: enable "Immutable releases" in the repository settings
+# (Settings -> General -> Releases) so that, once published, the release tag and
+# its assets can never be altered. This workflow reinforces that with signed
+# build-provenance attestations (actions/attest-build-provenance), giving each
+# zip a verifiable, tamper-evident link back to this exact workflow run.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write      # create the release and upload assets
+  id-token: write      # mint the OIDC token used to sign attestations
+  attestations: write  # record the build-provenance attestations
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fail the release early if the tag doesn't match package.json, so the
+      # published zips (named from package.json) line up with the release tag.
+      - name: Verify tag matches package.json version
+        run: |
+          pkg_version="$(node -p "require('./package.json').version")"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$pkg_version" != "$tag_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME (version $tag_version) does not match package.json version $pkg_version"
+            exit 1
+          fi
+          echo "version=$pkg_version" >> "$GITHUB_OUTPUT"
+        id: version
+
+      - name: Run tests
+        run: npm test
+
+      # Chrome MV3 build -> .output/<name>-<version>-chrome.zip
+      - name: Package Chrome extension
+        run: npm run zip
+
+      # Firefox MV2 build -> .output/<name>-<version>-firefox.zip
+      # and the AMO source package -> .output/<name>-<version>-sources.zip
+      - name: Package Firefox extension and sources
+        run: npm run zip:firefox
+
+      - name: List built artifacts
+        run: ls -la .output/*.zip
+
+      # Sign each zip with build-provenance attestations. The runner only ever
+      # holds this release's zips, so globbing .output is safe.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: '.output/*.zip'
+
+      - name: Publish release with assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag \
+            .output/*.zip
