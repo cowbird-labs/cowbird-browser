@@ -17,7 +17,15 @@ import {
   shareRecordFromWire,
   shareRecordToWire,
 } from '../sharing/wire';
+import { isValidID } from '../sharing/envelope';
 import { VaultNotFound, type KV } from './kv';
+
+/** assertID guards a path segment that may carry externally-supplied data,
+ * rejecting anything not UUID-shaped before it is concatenated into a KV path.
+ * Defense-in-depth behind the sharing service's trust-boundary checks. */
+function assertID(id: string, label: string): void {
+  if (!isValidID(id)) throw new Error(`invalid ${label}: ${JSON.stringify(id)}`);
+}
 import {
   lockedIdentityFromWire,
   lockedIdentityToWire,
@@ -98,6 +106,7 @@ export class VaultStore {
   // --- shared envelopes (shared/<ownerEntityID>/<shareID>) -------------------
 
   private sharedPath(shareID: string): string {
+    assertID(shareID, 'shareID');
     return `shared/${this.entityID}/${shareID}`;
   }
 
@@ -109,6 +118,8 @@ export class VaultStore {
     ownerID: string,
     shareID: string,
   ): Promise<{ env: Envelope; version: number }> {
+    assertID(ownerID, 'ownerID');
+    assertID(shareID, 'shareID');
     const { value, version } = await this.kv.read(`shared/${ownerID}/${shareID}`);
     return { env: envelopeFromWire(value as never), version };
   }
@@ -140,6 +151,7 @@ export class VaultStore {
   // --- shared links (users/<entityID>/links/<shareID>) -----------------------
 
   private linkPath(shareID: string): string {
+    assertID(shareID, 'shareID');
     return `users/${this.entityID}/links/${shareID}`;
   }
 

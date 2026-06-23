@@ -13,6 +13,8 @@ import { parseCsv, writeCsv } from './csv';
 
 const LP_NOTE_URL = 'http://sn';
 const LP_HEADER = ['url', 'username', 'password', 'totp', 'extra', 'name', 'grouping', 'fav'];
+// Columns that must all be present for a CSV to be treated as a LastPass export.
+const LP_REQUIRED = ['url', 'username', 'password', 'name'];
 
 export const lastPassCodec: Codec = {
   id: 'lastpass',
@@ -30,7 +32,14 @@ export const lastPassCodec: Codec = {
     const header = rows[0]!;
     const col = new Map<string, number>();
     header.forEach((h, i) => col.set(h.trim().toLowerCase(), i));
-    if (!col.has('name')) throw new Error('not a LastPass CSV (missing name column)');
+
+    // Detect the format on the canonical LastPass columns rather than `name`
+    // alone: a name-only match accepts almost any CSV, so an unexpected file
+    // would silently import as garbage secrets instead of erroring out.
+    const missing = LP_REQUIRED.filter((c) => !col.has(c));
+    if (missing.length > 0) {
+      throw new Error(`not a LastPass CSV (missing column(s): ${missing.join(', ')})`);
+    }
 
     const get = (rec: string[], key: string): string => {
       const i = col.get(key);
@@ -39,7 +48,15 @@ export const lastPassCodec: Codec = {
     };
 
     const contents: Content[] = [];
+    let skipped = 0;
     for (const rec of rows.slice(1)) {
+      // A LastPass export has a fixed column count; a row whose field count does
+      // not match the header is malformed (or from a mis-routed file). Skipping
+      // and surfacing the count beats silently importing ragged/garbage rows.
+      if (rec.length !== header.length) {
+        skipped++;
+        continue;
+      }
       contents.push(
         lpRowTo(
           get(rec, 'url'),
@@ -51,9 +68,7 @@ export const lastPassCodec: Codec = {
         ),
       );
     }
-    // parseCsv already drops malformed/blank lines, so there is nothing extra to
-    // count as skipped here.
-    return Promise.resolve({ contents, skipped: 0 });
+    return Promise.resolve({ contents, skipped });
   },
 };
 

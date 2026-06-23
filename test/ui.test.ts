@@ -45,9 +45,17 @@ describe('normalizeAddress', () => {
     expect(normalizeAddress('vault.example.com:8200')).toBe('https://vault.example.com:8200');
   });
 
-  it('leaves an explicit scheme untouched (including http)', () => {
+  it('leaves an explicit https scheme untouched', () => {
     expect(normalizeAddress('https://vault.example.com:8200')).toBe('https://vault.example.com:8200');
-    expect(normalizeAddress('http://vault.example.com:8200')).toBe('http://vault.example.com:8200');
+  });
+
+  it('rejects cleartext http to a non-loopback host', () => {
+    expect(() => normalizeAddress('http://vault.example.com:8200')).toThrow(/https/);
+  });
+
+  it('allows http to loopback hosts for local dev', () => {
+    expect(normalizeAddress('http://localhost:8200')).toBe('http://localhost:8200');
+    expect(normalizeAddress('http://127.0.0.1:8200')).toBe('http://127.0.0.1:8200');
   });
 
   it('trims whitespace and trailing slashes', () => {

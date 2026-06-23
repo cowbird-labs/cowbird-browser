@@ -125,6 +125,40 @@ describe('sharing protocol', () => {
   });
 });
 
+describe('share path validation', () => {
+  it('discards a share whose path tries to traverse out of its subtree', async () => {
+    // Anyone can write to bob's inbox. A hostile share whose shareID segment
+    // carries traversal/metacharacters must be rejected before its raw path is
+    // stored or concatenated into a Vault KV URL.
+    const hostile: Message = {
+      type: 'share',
+      shareID: 'mallory',
+      senderID: 'mallory',
+      envVersion: 1,
+      timestamp: new Date().toISOString(),
+      share: {
+        sharePath: 'mallory/../../pubkeys/alice',
+        wrappedKey: new Uint8Array([1, 2, 3]),
+        itemType: 'login',
+        ownerID: 'mallory',
+      },
+      signature: new Uint8Array(0),
+    };
+    await bobStore.sendMessage('bob', newID(), hostile);
+
+    await bobSvc.processInbox();
+    expect(await bobSvc.listSharedLinks()).toHaveLength(0);
+    // The message is consumed, not left to wedge the inbox.
+    expect(await bobStore.listInboxMessages()).toHaveLength(0);
+  });
+
+  it('rejects a malformed shareID at the store path boundary', async () => {
+    await expect(bobStore.getSharedEnvelope('alice', '../alice/items/secret')).rejects.toThrow(
+      /invalid/,
+    );
+  });
+});
+
 describe('message signing', () => {
   it('signs and verifies a share message, and rejects tampering', async () => {
     const msg: Message = {

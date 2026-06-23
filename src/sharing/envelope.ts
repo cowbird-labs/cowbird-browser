@@ -93,8 +93,28 @@ export function sharePath(ownerID: string, shareID: string): string {
   return `${ownerID}/${shareID}`;
 }
 
+// Both segments of a share path are Vault entity IDs / locally minted UUIDs
+// (crypto.randomUUID). An inbox message is attacker-controlled, parseSharePath
+// only splits on the first '/', and the segments are concatenated unescaped into
+// a Vault KV URL (fetch normalizes '..' before sending), so an unconstrained
+// segment enables namespace escape, path traversal, and cross-key reads. We
+// constrain each segment to a single safe path token — no '/', no '.', no KV/URL
+// metacharacters, bounded length — which admits every real entity/share UUID
+// while closing the traversal vectors entirely.
+const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+/** isValidID reports whether s is safe to use as a single KV path segment. */
+export function isValidID(s: string): boolean {
+  return ID_RE.test(s);
+}
+
 export function parseSharePath(path: string): { ownerID: string; shareID: string } {
   const i = path.indexOf('/');
   if (i < 0) throw new Error(`invalid share path ${JSON.stringify(path)}: expected ownerID/shareID`);
-  return { ownerID: path.slice(0, i), shareID: path.slice(i + 1) };
+  const ownerID = path.slice(0, i);
+  const shareID = path.slice(i + 1);
+  if (!isValidID(ownerID) || !isValidID(shareID)) {
+    throw new Error(`invalid share path ${JSON.stringify(path)}: malformed ownerID/shareID`);
+  }
+  return { ownerID, shareID };
 }

@@ -158,6 +158,24 @@ describe('LastPass codec', () => {
     expect(n?.data.title).toBe('Note');
     if (n?.kind === 'note') expect(n.data.body).toBe('secret body');
   });
+
+  it('rejects a CSV that only has a name column (mis-routed file)', async () => {
+    const csv = 'name,colour\nApple,red\n';
+    await expect(lastPassCodec.unmarshal(new TextEncoder().encode(csv))).rejects.toThrow(
+      /not a LastPass CSV/,
+    );
+  });
+
+  it('skips ragged rows and reports the skipped count', async () => {
+    const csv =
+      'url,username,password,totp,extra,name,grouping,fav\n' +
+      'https://acme.test,alice,pw123,,,Acme,,0\n' +
+      'too,few,fields\n'; // wrong column count → malformed
+    const { contents, skipped } = await lastPassCodec.unmarshal(new TextEncoder().encode(csv));
+    expect(skipped).toBe(1);
+    expect(contents).toHaveLength(1);
+    expect(findLogin(contents, 'Acme').username).toBe('alice');
+  });
 });
 
 describe('Proton codec', () => {

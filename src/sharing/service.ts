@@ -10,6 +10,7 @@ import {
   contentAAD,
   envelopeAAD,
   findOwnerKey,
+  isValidID,
   newEnvelope,
   newID,
   openEnvelope,
@@ -395,6 +396,12 @@ export class Service {
       return this.store.deleteInboxMessage(entry.id);
     }
 
+    // shareID is attacker-controlled and keys the stored SharedLink path; reject
+    // anything not UUID-shaped before it reaches path construction.
+    if (!isValidID(entry.msg.shareID)) {
+      return this.store.deleteInboxMessage(entry.id);
+    }
+
     // Authenticity (path): the shared envelope's storage path is the only owner
     // attribution Vault enforces. A self-asserted OwnerID disagreeing with the
     // path, or a malformed path, is a forgery.
@@ -440,6 +447,11 @@ export class Service {
   }
 
   private async processRevoke(entry: InboxEntry): Promise<void> {
+    // shareID is attacker-controlled and is used to look up the link by path.
+    if (!isValidID(entry.msg.shareID)) {
+      return this.store.deleteInboxMessage(entry.id);
+    }
+
     let link: SharedLink;
     try {
       link = await this.store.getSharedLink(entry.msg.shareID);
