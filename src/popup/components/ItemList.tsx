@@ -36,12 +36,14 @@ export function ItemList({
 
   return (
     <>
-      <input
-        className="search"
-        placeholder="Search"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
+      <div className="search-bar">
+        <input
+          className="search"
+          placeholder="Search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
       {filtered.length === 0 ? (
         <p className="screen muted">No items.</p>
       ) : (
