@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { ItemSummary } from '../../messaging/protocol';
 import { typeLabel } from '../itemSchema';
 
@@ -19,19 +18,21 @@ function matches(it: ItemSummary, q: string): boolean {
 
 export function ItemList({
   items,
+  search,
+  onSearchChange,
   onSelect,
 }: {
   items: ItemSummary[] | null;
+  search: string;
+  onSearchChange: (q: string) => void;
   onSelect: (it: ItemSummary) => void;
 }) {
-  const [q, setQ] = useState('');
-
   if (!items) {
     return <p className="screen muted">Loading…</p>;
   }
 
   const filtered = items
-    .filter((it) => matches(it, q))
+    .filter((it) => matches(it, search))
     .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 
   return (
@@ -40,8 +41,8 @@ export function ItemList({
         <input
           className="search"
           placeholder="Search"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
         />
       </div>
       {filtered.length === 0 ? (

@@ -8,13 +8,7 @@ import { ItemDetail } from './ItemDetail';
 import { ItemEditor } from './ItemEditor';
 import { Settings } from './Settings';
 import { Generator } from './Generator';
-
-type View =
-  | { kind: 'list' }
-  | { kind: 'detail'; id: string; shared: boolean }
-  | { kind: 'new' }
-  | { kind: 'generator' }
-  | { kind: 'settings' };
+import { loadUiState, saveUiState, type PopupView } from '../uiState';
 
 export function VaultView({
   state,
@@ -24,7 +18,9 @@ export function VaultView({
   onState: (s: StateInfo) => void;
 }) {
   const [items, setItems] = useState<ItemSummary[] | null>(null);
-  const [view, setView] = useState<View>({ kind: 'list' });
+  // `null` view = still restoring the persisted screen on mount (issue #8).
+  const [view, setView] = useState<PopupView | null>(null);
+  const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const loadItems = useCallback(async () => {
@@ -41,10 +37,40 @@ export function VaultView({
     void loadItems();
   }, [loadItems]);
 
+  // Restore the last popup screen (and search) so reopening lands where the user
+  // left off rather than on the default list.
+  useEffect(() => {
+    void loadUiState().then((s) => {
+      setView(s.view);
+      setSearch(s.search);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (view) void saveUiState({ view, search });
+  }, [view, search]);
+
+  // A restored detail view may point at an item that no longer exists (deleted,
+  // or a different vault since it was saved). Fall back to the list rather than
+  // render a dead detail screen.
+  useEffect(() => {
+    if (
+      view?.kind === 'detail' &&
+      items &&
+      !items.some((it) => it.id === view.id && it.shared === view.shared)
+    ) {
+      setView({ kind: 'list' });
+    }
+  }, [view, items]);
+
   const backToList = () => {
     setView({ kind: 'list' });
     void loadItems();
   };
+
+  if (view === null) {
+    return <p className="screen muted">Loading…</p>;
+  }
 
   if (view.kind === 'settings') {
     return <Settings onBack={() => setView({ kind: 'list' })} onState={onState} />;
@@ -100,6 +126,8 @@ export function VaultView({
       )}
       <ItemList
         items={items}
+        search={search}
+        onSearchChange={setSearch}
         onSelect={(it) => setView({ kind: 'detail', id: it.id, shared: it.shared })}
       />
       <p className="muted" style={{ padding: '8px 12px' }}>
