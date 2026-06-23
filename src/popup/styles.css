@@ -11,6 +11,8 @@
   --hover: #eef1fb;
   --badge-bg: #e7ebfb;
   --badge-fg: var(--accent);
+  /* Fixed topbar height so the sticky search bar can pin flush beneath it. */
+  --topbar-h: 48px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -169,11 +171,13 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  height: var(--topbar-h);
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
   position: sticky;
   top: 0;
+  z-index: 10;
 }
 
 .topbar .title {
@@ -375,11 +379,21 @@ button.field-main {
   color: var(--muted);
 }
 
+/* Sticky search: scrolls with the list, then pins flush below the topbar so it
+   stays on screen. The opaque, full-width bar keeps list rows from showing
+   through the input's side margins as they scroll behind it. */
+.search-bar {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 5;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
 .search {
-  /* Inputs are width:100% globally; the 12px side margins would push this to
-     360 + 24px and overflow the popup, so subtract the margins from the width. */
-  width: calc(100% - 24px);
-  margin: 10px 12px;
+  width: 100%;
+  margin: 0;
 }
 
 .custom-field {
