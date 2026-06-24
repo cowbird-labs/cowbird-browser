@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   password as genPassword,
   passphrase as genPassphrase,
-  passwordEntropy,
   passphraseEntropy,
+  passwordStrength,
+  strengthFromBits,
 } from '../../generate';
 import {
   loadSettings,
@@ -13,16 +14,7 @@ import {
   type GenMode,
 } from '../generatorSettings';
 import { Icon } from './Icon';
-
-// strengthLabel maps entropy in bits to a coarse human label, matching the
-// rough bands the desktop strength meter uses.
-function strengthLabel(bits: number): string {
-  if (bits < 40) return 'Weak';
-  if (bits < 60) return 'Fair';
-  if (bits < 80) return 'Good';
-  if (bits < 100) return 'Strong';
-  return 'Very strong';
-}
+import { StrengthMeter } from './StrengthMeter';
 
 /**
  * Generator is the password/passphrase generator surface. When `onUse` is
@@ -76,8 +68,13 @@ export function Generator({
   const setPP = (patch: Partial<typeof pp>) => update({ ...settings, passphrase: { ...pp, ...patch } });
   const setMode = (mode: GenMode) => update({ ...settings, mode });
 
-  const bits =
-    settings.mode === 'password' ? passwordEntropy(p) : passphraseEntropy(pp);
+  // Match the desktop generator's readout: password mode scores the actual
+  // generated value with the charset heuristic, while passphrase mode uses the
+  // exact word-choice entropy.
+  const strength =
+    settings.mode === 'password'
+      ? passwordStrength(value)
+      : strengthFromBits(passphraseEntropy(pp));
 
   // Prevent disabling the last enabled character class.
   const classCount = [p.lower, p.upper, p.digits, p.symbols].filter(Boolean).length;
@@ -114,13 +111,7 @@ export function Generator({
             <Icon name="refresh" />
           </button>
         </div>
-        {error ? (
-          <p className="error">{error}</p>
-        ) : (
-          <p className="muted">
-            {strengthLabel(bits)} · {Math.round(bits)} bits
-          </p>
-        )}
+        {error ? <p className="error">{error}</p> : <StrengthMeter strength={strength} />}
 
         <div className="row gen-modes">
           <button
