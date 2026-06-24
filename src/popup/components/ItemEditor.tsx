@@ -4,8 +4,10 @@ import type { ItemDetail } from '../../messaging/protocol';
 import type { Content, Field, FieldType, ItemType } from '../../items/types';
 import { ITEM_TYPES, TYPE_FIELDS } from '../itemSchema';
 import { errorMessage } from '../util';
+import { passwordStrength } from '../../generate';
 import { Generator } from './Generator';
 import { Icon } from './Icon';
+import { StrengthMeter } from './StrengthMeter';
 
 const FIELD_TYPES: FieldType[] = ['text', 'hidden', 'totp', 'url'];
 
@@ -143,9 +145,12 @@ export function ItemEditor({
               />
             )}
             {f.key === 'password' && (
-              <button type="button" className="link" onClick={() => setGenFor(f.key)}>
-                <Icon name="refresh" size={12} /> Generate
-              </button>
+              <>
+                <StrengthMeter strength={passwordStrength(values[f.key] ?? '')} />
+                <button type="button" className="link" onClick={() => setGenFor(f.key)}>
+                  <Icon name="refresh" size={12} /> Generate
+                </button>
+              </>
             )}
           </div>
         ))}

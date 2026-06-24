@@ -4,6 +4,8 @@ import {
   passphrase,
   passwordEntropy,
   passphraseEntropy,
+  passwordStrength,
+  strengthFromBits,
   type PasswordOpts,
   type PassphraseOpts,
 } from '../src/generate';
@@ -96,5 +98,37 @@ describe('entropy', () => {
 
   it('computes passphrase entropy as words × log2(7776)', () => {
     expect(passphraseEntropy(phrase)).toBeCloseTo(5 * Math.log2(7776), 6);
+  });
+});
+
+describe('strength (port of internal/ui/strength.go)', () => {
+  it('returns a zero score and empty label for empty input', () => {
+    expect(passwordStrength('')).toEqual({ score: 0, label: '', bits: 0 });
+  });
+
+  it('penalises repetition via the unique-char average', () => {
+    // charset = 26 (lower only); effective = (8 + 1) / 2 = 4.5.
+    const s = passwordStrength('aaaaaaaa');
+    expect(s.bits).toBeCloseTo(4.5 * Math.log2(26), 6);
+    expect(s.label).toBe('Very weak');
+  });
+
+  it('sums charset sizes across classes (26+26+10+33=95)', () => {
+    // All unique: effective = n = 8.
+    const s = passwordStrength('Ab1!Cd2?');
+    expect(s.bits).toBeCloseTo(8 * Math.log2(95), 6);
+  });
+
+  it('maps bits to the desktop label bands', () => {
+    expect(strengthFromBits(27).label).toBe('Very weak');
+    expect(strengthFromBits(28).label).toBe('Weak');
+    expect(strengthFromBits(36).label).toBe('Fair');
+    expect(strengthFromBits(60).label).toBe('Good');
+    expect(strengthFromBits(80).label).toBe('Strong');
+  });
+
+  it('scores as bits/80 capped at 1', () => {
+    expect(strengthFromBits(40).score).toBeCloseTo(0.5, 6);
+    expect(strengthFromBits(200).score).toBe(1);
   });
 });

@@ -647,6 +647,50 @@ button.field-main {
   user-select: all;
 }
 
+/* Password strength meter */
+.strength {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.strength-track {
+  flex: 1;
+  height: 6px;
+  background: var(--hover);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.strength-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.15s ease, background-color 0.15s ease;
+}
+
+.strength-fill.weak {
+  background: #d9534f;
+}
+
+.strength-fill.fair {
+  background: #e0a800;
+}
+
+.strength-fill.good {
+  background: #6aa84f;
+}
+
+.strength-fill.strong {
+  background: #2e8540;
+}
+
+.strength-text {
+  flex-shrink: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .gen-modes {
   margin: 12px 0;
 }
