@@ -50,11 +50,38 @@ export function addressSchemeIssue(address: string): AddressSchemeIssue {
   return null;
 }
 
-/** copyText writes text to the clipboard, swallowing failures. */
+let popupClipTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * copyText writes text to the clipboard, swallowing failures, then arms the
+ * configured auto-clear. The worker holds the authoritative timer (so the wipe
+ * still happens after the popup closes — reliable on Firefox's persistent
+ * background page); we also schedule one here so the clipboard is cleared while
+ * the popup stays open, which is the working path on Chrome's MV3 worker.
+ */
 export async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
     // Clipboard may be unavailable; nothing else to do.
+    return;
+  }
+  // Lazy imports: keep util.ts free of the webextension-polyfill dependency at
+  // module load so it stays importable in plain (non-extension) test contexts.
+  const [{ rpc }, { loadSecuritySettings }] = await Promise.all([
+    import('../messaging/rpc'),
+    import('../settings/security'),
+  ]);
+  void rpc('armClipboardClear').catch(() => {});
+  const s = await loadSecuritySettings();
+  if (popupClipTimer) {
+    clearTimeout(popupClipTimer);
+    popupClipTimer = null;
+  }
+  if (s.clipboardClear && s.clipboardClearSeconds > 0) {
+    popupClipTimer = setTimeout(() => {
+      popupClipTimer = null;
+      void navigator.clipboard.writeText('').catch(() => {});
+    }, s.clipboardClearSeconds * 1000);
   }
 }

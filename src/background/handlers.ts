@@ -13,6 +13,8 @@ import { exportItems, importItems, removeDuplicateItems } from '../core/transfer
 import { loadOrganization, saveOrganization } from '../core/organization';
 import type { Organization } from '../organization/index';
 import { allCodecs, getCodec } from '../transfer/index';
+import { saveSecuritySettings } from '../settings/security';
+import { armAutoLock, disarmAutoLock, armClipboardClear, clearClipboardNow } from './security';
 import { hostMatches, classifySubmission } from '../autofill/match';
 import type { HostLogin, SaveClass } from '../autofill/match';
 import { totpCode } from '../items/totp';
@@ -131,6 +133,8 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
       rotationCompleter(record.displayName),
     );
     await setIdentity(identity);
+    // Start the inactivity auto-lock countdown for this unlocked session.
+    await armAutoLock();
     // Best-effort: drain any pending shares/revokes so the list is current.
     try {
       const app = await requireApp();
@@ -143,11 +147,14 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
 
   async lock() {
     await clearIdentity();
+    await disarmAutoLock();
+    await clearClipboardNow();
     return stateInfo();
   },
 
   async disconnect() {
     await disconnect();
+    await disarmAutoLock();
     return stateInfo();
   },
 
@@ -381,6 +388,19 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
   async removeDuplicates({ dryRun }) {
     const app = await requireApp();
     return { count: await removeDuplicateItems(app, dryRun) };
+  },
+
+  async setSecuritySettings(settings) {
+    await saveSecuritySettings(settings);
+    // Re-arm with the new timeout immediately (also clears the alarm if auto-lock
+    // was turned off). Settings are only reachable while unlocked.
+    await armAutoLock();
+    return settings;
+  },
+
+  async armClipboardClear() {
+    await armClipboardClear();
+    return {};
   },
 };
 

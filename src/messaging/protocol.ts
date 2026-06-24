@@ -2,6 +2,7 @@ import type { VaultConfig } from '../core/config';
 import type { AuthField } from '../auth/types';
 import type { Content, ItemType } from '../items/types';
 import type { Label } from '../organization/index';
+import type { SecuritySettings } from '../settings/security';
 
 // The typed RPC contract between the popup UI and the background service worker.
 // All payloads are JSON-serializable: the worker holds the keys and returns only
@@ -109,6 +110,11 @@ export interface Api {
   exportItems(args: { format: string }): { fileBase64: string; filename: string };
   importItems(args: { format: string; dataBase64: string }): { imported: number; skipped: number };
   removeDuplicates(args: { dryRun: boolean }): { count: number };
+
+  // Security preferences (auto-lock + clipboard clearing), enforced by the worker.
+  setSecuritySettings(args: SecuritySettings): SecuritySettings;
+  // Arm the post-copy clipboard wipe; called by the popup after copying a secret.
+  armClipboardClear(): Record<string, never>;
 }
 
 export type Method = keyof Api;
@@ -128,3 +134,4 @@ export type RpcResponse =
 export type { VaultConfig } from '../core/config';
 export type { Content, ItemType } from '../items/types';
 export type { Label } from '../organization/index';
+export type { SecuritySettings } from '../settings/security';

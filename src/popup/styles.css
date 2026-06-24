@@ -143,6 +143,19 @@ button:disabled {
   margin-top: 16px;
 }
 
+/* Checkbox + label row (settings toggles). */
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.toggle input {
+  width: auto;
+  margin: 0;
+}
+
 .error {
   color: var(--danger);
   margin: 8px 0;

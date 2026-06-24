@@ -24,13 +24,23 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   // AMO data-collection consent is irrelevant for locally loaded dev builds.
   suppressWarnings: { firefoxDataCollection: true },
-  manifest: {
+  manifest: ({ browser }) => ({
     name: 'Cowbird',
     description: 'End-to-end encrypted password manager backed by your own HashiCorp Vault.',
     // storage: config + in-memory session; scripting/activeTab: autofill (later);
-    // clipboardWrite: copy secrets. Broad host access: the Vault address is
-    // user-configured and autofill runs on arbitrary sites.
-    permissions: ['storage', 'activeTab', 'scripting', 'clipboardWrite'],
+    // clipboardWrite: copy secrets + auto-clear the clipboard; alarms: the
+    // inactivity auto-lock timer (survives service-worker restarts); offscreen
+    // (Chrome only): a DOM context for the MV3 worker to clear the clipboard —
+    // Firefox's persistent background page needs none. Broad host access: the
+    // Vault address is user-configured and autofill runs on arbitrary sites.
+    permissions: [
+      'storage',
+      'activeTab',
+      'scripting',
+      'clipboardWrite',
+      'alarms',
+      ...(browser === 'chrome' ? ['offscreen'] : []),
+    ],
     host_permissions: ['<all_urls>'],
     // 'wasm-unsafe-eval' lets libsodium and hash-wasm instantiate their WASM.
     content_security_policy: {
@@ -65,7 +75,7 @@ export default defineConfig({
         },
       },
     },
-  },
+  }),
   vite: () => ({
     resolve: {
       alias: {

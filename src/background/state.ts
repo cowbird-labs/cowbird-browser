@@ -90,6 +90,11 @@ export async function clearIdentity(): Promise<void> {
   await sessionStore.remove(IDENTITY_KEY);
 }
 
+/** isUnlocked reports whether decrypted key material is currently held. */
+export async function isUnlocked(): Promise<boolean> {
+  return (await getIdentityRecord()) !== null;
+}
+
 export async function disconnect(): Promise<void> {
   await sessionStore.remove([SESSION_KEY, IDENTITY_KEY, TOKEN_INVALID_KEY]);
 }
