@@ -280,6 +280,7 @@ export function ItemDetail({
   const [detail, setDetail] = useState<ItemDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -336,7 +337,7 @@ export function ItemDetail({
   };
 
   const del = async () => {
-    if (!confirm('Delete this item? This cannot be undone.')) return;
+    setConfirmingDelete(false);
     try {
       await rpc('deleteItem', { id });
       afterChange();
@@ -455,13 +456,67 @@ export function ItemDetail({
                 <button className="primary" onClick={() => setEditing(true)}>
                   Edit
                 </button>
-                <button className="danger" onClick={() => void del()}>
+                <button className="danger" onClick={() => setConfirmingDelete(true)}>
                   Delete
                 </button>
               </div>
             )}
           </>
         )}
+      </div>
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete item?"
+          message="This cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={() => void del()}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div
+        className="modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="modal-title">{title}</h2>
+        <p className="modal-message">{message}</p>
+        <div className="modal-actions">
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className="danger" autoFocus onClick={onConfirm}>
+            {confirmLabel}
+          </button>
+        </div>
       </div>
     </div>
   );
