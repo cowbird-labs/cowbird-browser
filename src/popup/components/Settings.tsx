@@ -3,6 +3,7 @@ import { rpc } from '../../messaging/rpc';
 import type { StateInfo, TransferFormat } from '../../messaging/protocol';
 import { errorMessage } from '../util';
 import { Icon } from './Icon';
+import { SecuritySettingsSection } from './SecuritySettingsSection';
 
 function downloadBase64(fileBase64: string, filename: string): void {
   const bin = atob(fileBase64);
@@ -167,6 +168,8 @@ export function Settings({
       <div className="screen">
         {error && <p className="error">{error}</p>}
         {notice && <p className="muted">{notice}</p>}
+
+        <SecuritySettingsSection />
 
         <h2>Change unlock password</h2>
         <label htmlFor="op">Current password</label>

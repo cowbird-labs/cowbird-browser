@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Cowbird offscreen</title>
+  </head>
+  <body>
+    <!-- Hidden Chrome offscreen document: provides a DOM context the MV3 service
+         worker lacks, used solely to clear the clipboard. Created on demand by
+         the worker (chrome.offscreen) and closed again right after. -->
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
