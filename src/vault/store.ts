@@ -26,12 +26,16 @@ import { VaultNotFound, type KV } from './kv';
 function assertID(id: string, label: string): void {
   if (!isValidID(id)) throw new Error(`invalid ${label}: ${JSON.stringify(id)}`);
 }
+import type { SelfSealed } from '../crypto/self';
 import {
   lockedIdentityFromWire,
   lockedIdentityToWire,
   publicKeyEntryFromWire,
   pubkeyRecordToWire,
+  selfSealedFromWire,
+  selfSealedToWire,
   type PubkeyRecordWire,
+  type SelfSealedWire,
 } from './records';
 
 // VaultStore implements the storage surface the sharing service and core layer
@@ -223,5 +227,23 @@ export class VaultStore {
 
   async deletePrevLockedIdentity(): Promise<void> {
     await this.kv.delete(this.identityPath('.prev'));
+  }
+
+  // --- organization overlay (users/<entityID>/organization) ------------------
+  // The per-user encrypted favorites/labels record. Vault only ever sees the
+  // sealed blob; the plaintext stays on the client. Read throws VaultNotFound
+  // when none has been stored yet (the core layer treats that as "empty").
+
+  private organizationPath(): string {
+    return `users/${this.entityID}/organization`;
+  }
+
+  async getOrganization(): Promise<SelfSealed> {
+    const { value } = await this.kv.read(this.organizationPath());
+    return selfSealedFromWire(value as SelfSealedWire);
+  }
+
+  async putOrganization(sealed: SelfSealed): Promise<void> {
+    await this.kv.write(this.organizationPath(), selfSealedToWire(sealed));
   }
 }

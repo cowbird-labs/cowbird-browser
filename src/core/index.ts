@@ -10,3 +10,4 @@ export {
 } from './identity';
 export { App } from './app';
 export { rotateKey, completeInterruptedRotation, rotationCompleter } from './rotation';
+export { loadOrganization, saveOrganization } from './organization';

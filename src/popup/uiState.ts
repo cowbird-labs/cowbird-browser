@@ -13,6 +13,7 @@ export type PopupView =
   | { kind: 'detail'; id: string; shared: boolean }
   | { kind: 'new' }
   | { kind: 'generator' }
+  | { kind: 'labels' }
   | { kind: 'settings' };
 
 export interface PopupUiState {

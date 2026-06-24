@@ -5,6 +5,7 @@ import type { Content, Field, FieldType, ItemType } from '../../items/types';
 import { ITEM_TYPES, TYPE_FIELDS } from '../itemSchema';
 import { errorMessage } from '../util';
 import { Generator } from './Generator';
+import { Icon } from './Icon';
 
 const FIELD_TYPES: FieldType[] = ['text', 'hidden', 'totp', 'url'];
 
@@ -102,7 +103,7 @@ export function ItemEditor({
     <div>
       <div className="topbar">
         <button className="iconbtn" type="button" onClick={onCancel}>
-          ‹ Cancel
+          <Icon name="back" size={14} /> Cancel
         </button>
         <span className="title">{initial ? 'Edit item' : 'New item'}</span>
         <span />
@@ -143,7 +144,7 @@ export function ItemEditor({
             )}
             {f.key === 'password' && (
               <button type="button" className="link" onClick={() => setGenFor(f.key)}>
-                ⟳ Generate
+                <Icon name="refresh" size={12} /> Generate
               </button>
             )}
           </div>
@@ -173,7 +174,7 @@ export function ItemEditor({
                 onChange={(e) => setCustom(i, { label: e.target.value })}
               />
               <button type="button" className="link danger" onClick={() => setCustomFields((cfs) => cfs.filter((_, idx) => idx !== i))}>
-                ✕
+                <Icon name="close" size={12} />
               </button>
             </div>
             <input
@@ -189,7 +190,7 @@ export function ItemEditor({
           className="link"
           onClick={() => setCustomFields((cfs) => [...cfs, { type: 'text', label: '', value: '' }])}
         >
-          ＋ Add custom field
+          <Icon name="add" size={12} /> Add custom field
         </button>
 
         {error && <p className="error">{error}</p>}

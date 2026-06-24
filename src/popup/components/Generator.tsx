@@ -12,6 +12,7 @@ import {
   type GeneratorSettings,
   type GenMode,
 } from '../generatorSettings';
+import { Icon } from './Icon';
 
 // strengthLabel maps entropy in bits to a coarse human label, matching the
 // rough bands the desktop strength meter uses.
@@ -96,7 +97,7 @@ export function Generator({
     <div>
       <div className="topbar">
         <button className="iconbtn" type="button" onClick={onClose}>
-          ‹ {onUse ? 'Back' : 'Close'}
+          <Icon name="back" size={14} /> {onUse ? 'Back' : 'Close'}
         </button>
         <span className="title">Generator</span>
         <span />
@@ -110,7 +111,7 @@ export function Generator({
             title="Regenerate"
             onClick={() => regenerate(settings)}
           >
-            ⟳
+            <Icon name="refresh" />
           </button>
         </div>
         {error ? (

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { rpc } from '../../messaging/rpc';
-import type { ItemDetail as ItemDetailData } from '../../messaging/protocol';
+import type { ItemDetail as ItemDetailData, Label } from '../../messaging/protocol';
 import type { Field, FieldType } from '../../items/types';
 import { TYPE_FIELDS, typeLabel } from '../itemSchema';
 import { copyText, errorMessage } from '../util';
@@ -9,6 +9,7 @@ import { totpNow, groupDigits, TOTP_PERIOD } from '../totp';
 import { Icon } from './Icon';
 import { ItemEditor } from './ItemEditor';
 import { SharePanel } from './SharePanel';
+import { LabelChips } from './LabelChips';
 
 // useCopied gives a click handler that copies a value and briefly flips a
 // `copied` flag for "Copied" feedback on the row.
@@ -150,14 +151,129 @@ function WebsitesGroup({ urls }: { urls: string[] }) {
   );
 }
 
+// LabelSection shows an item's assigned labels (removable) and an affordance to
+// assign an existing label or create a new one inline. Works for owned and shared
+// items alike — the overlay never touches the shared envelope. `onChanged` is
+// fired after a successful mutation so the caller can refresh its own view.
+function LabelSection({
+  id,
+  assigned,
+  allLabels,
+  onChanged,
+}: {
+  id: string;
+  assigned: string[];
+  allLabels: Label[];
+  onChanged: () => void;
+}) {
+  const [labels, setLabels] = useState<Label[]>(allLabels);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  // Keep the local set in sync if the parent's known labels change (e.g. after a
+  // reload), so newly created labels and renames show up without remounting.
+  useEffect(() => {
+    setLabels(allLabels);
+  }, [allLabels]);
+
+  const labelById = new Map(labels.map((l) => [l.id, l]));
+  const unassigned = labels.filter((l) => !assigned.includes(l.id));
+
+  const run = async (op: () => Promise<unknown>) => {
+    setError(null);
+    try {
+      await op();
+      // Pull the canonical label set back (covers inline-created labels).
+      const { labels } = await rpc('listLabels');
+      setLabels(labels);
+      onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+
+  const assign = (labelId: string) => {
+    if (labelId) void run(() => rpc('assignLabel', { id, labelId }));
+  };
+
+  const create = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    await run(async () => {
+      const { label } = await rpc('addLabel', { name, color: '' });
+      await rpc('assignLabel', { id, labelId: label.id });
+    });
+    setNewName('');
+    setAdding(false);
+  };
+
+  return (
+    <div className="card label-section">
+      <div className="field">
+        <Icon name="info" className="field-icon" />
+        <div className="field-main">
+          <div className="field-label">Labels</div>
+          {assigned.length > 0 ? (
+            <LabelChips
+              labelIds={assigned}
+              labelById={labelById}
+              onRemove={(labelId) => void run(() => rpc('unassignLabel', { id, labelId }))}
+            />
+          ) : (
+            <div className="muted">None</div>
+          )}
+          {error && <p className="error">{error}</p>}
+          <div className="row label-add">
+            {unassigned.length > 0 && (
+              <select value="" onChange={(e) => assign(e.target.value)} title="Assign a label">
+                <option value="">Assign label…</option>
+                {unassigned.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {adding ? (
+              <>
+                <input
+                  className="search"
+                  placeholder="New label"
+                  autoFocus
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void create();
+                    if (e.key === 'Escape') setAdding(false);
+                  }}
+                />
+                <button className="primary" disabled={!newName.trim()} onClick={() => void create()}>
+                  Create
+                </button>
+              </>
+            ) : (
+              <button className="iconbtn" title="New label" onClick={() => setAdding(true)}>
+                <Icon name="add" size={12} /> New
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ItemDetail({
   id,
   shared,
+  labels,
   onBack,
   afterChange,
 }: {
   id: string;
   shared: boolean;
+  labels: Label[];
   onBack: () => void;
   afterChange: () => void;
 }) {
@@ -208,6 +324,17 @@ export function ItemDetail({
     }
   };
 
+  const toggleFavorite = async () => {
+    setError(null);
+    try {
+      const { favorite } = await rpc('toggleFavorite', { id });
+      setDetail((d) => (d ? { ...d, favorite } : d));
+      afterChange();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+
   const del = async () => {
     if (!confirm('Delete this item? This cannot be undone.')) return;
     try {
@@ -229,10 +356,22 @@ export function ItemDetail({
     <div>
       <div className="topbar">
         <button className="iconbtn" onClick={onBack}>
-          ‹ Back
+          <Icon name="back" size={14} /> Back
         </button>
         <span className="title">{shared ? 'Shared item' : typeLabel(detail?.type ?? 'login')}</span>
-        <span />
+        {detail ? (
+          <button
+            type="button"
+            className={`iconbtn star${detail.favorite ? ' on' : ''}`}
+            title={detail.favorite ? 'Unfavorite' : 'Favorite'}
+            aria-pressed={detail.favorite}
+            onClick={() => void toggleFavorite()}
+          >
+            <Icon name={detail.favorite ? 'star' : 'star-outline'} size={16} />
+          </button>
+        ) : (
+          <span />
+        )}
       </div>
       <div className="screen">
         {error && <p className="error">{error}</p>}
@@ -288,6 +427,16 @@ export function ItemDetail({
                 )}
               </div>
             )}
+
+            <LabelSection
+              id={id}
+              assigned={detail.labels}
+              allLabels={labels}
+              onChanged={() => {
+                void load();
+                afterChange();
+              }}
+            />
 
             {detail.type === 'login' && (
               <div className="actions">

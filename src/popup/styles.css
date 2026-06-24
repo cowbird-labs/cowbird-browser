@@ -8,6 +8,7 @@
   --danger: #c92a2a;
   --warn: #9a6700;
   --card: #fff;
+  --zebra: #f3f4f8;
   --hover: #eef1fb;
   --badge-bg: #e7ebfb;
   --badge-fg: var(--accent);
@@ -26,6 +27,7 @@
     --danger: #ff7a7a;
     --warn: #e3b341;
     --card: #262629;
+    --zebra: #2b2b2f;
     --hover: #2f3340;
     --badge-bg: #2a3354;
     --badge-fg: #9db0ff;
@@ -196,6 +198,10 @@ button:disabled {
 }
 
 .iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   padding: 4px 6px;
 }
 
@@ -386,14 +392,209 @@ button.field-main {
   position: sticky;
   top: var(--topbar-h);
   z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 10px 12px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
 
 .search {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   margin: 0;
+}
+
+.label-filter {
+  flex: 0 0 auto;
+  max-width: 110px;
+}
+
+/* Favorites star toggle (search bar, list rows, detail topbar). */
+.iconbtn.star {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+/* The favorites filter toggle reads as a plain icon (like the row stars) rather
+   than a boxed control, so it doesn't clash with the search input and select. */
+.search-bar .star {
+  border: none;
+  background: transparent;
+  padding: 6px;
+}
+
+.iconbtn.star.on {
+  color: #f5b301;
+}
+
+/* List rows carry a clickable main area plus a trailing star button, so the
+   star can be toggled without opening the item. */
+/* The row paints the card surface so the whole strip (main area + star column)
+   is one uniform color; the buttons inside are transparent. */
+.item-row {
+  display: flex;
+  align-items: center;
+  background: var(--card);
+}
+
+/* Zebra striping: alternate rows get a subtle tint of the card surface. */
+.item-row:nth-child(even) {
+  background: var(--zebra);
+}
+
+.item-row .item-main {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 12px;
+}
+
+.item-row:hover {
+  background: var(--hover);
+}
+
+.item-row .star {
+  flex: 0 0 auto;
+  width: auto; /* override .list li button { width: 100% } so it doesn't eat the row */
+  background: transparent;
+  margin-right: 6px;
+}
+
+/* Label chips (list rows + detail). A colored dot keeps any label color legible
+   regardless of theme contrast. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  background: var(--badge-bg);
+  color: var(--badge-fg);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.chip-x {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 0 0 2px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.label-section .label-add {
+  margin-top: 8px;
+}
+
+/* In-popup color control: a live preview swatch + hex field. No native dialog
+   (which would close the toolbar popup in Firefox), no preset restriction. */
+.color-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.color-preview {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.color-hex {
+  width: 84px;
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.color-hex[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+/* In-popup color picker panel. position:fixed (anchored in JS to the swatch) so
+   it escapes the surrounding card's overflow clipping and never opens an OS
+   window — the toolbar popup stays open. */
+.color-popover {
+  position: fixed;
+  z-index: 50;
+  width: 208px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.color-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.color-slider input[type='range'] {
+  width: 100%;
+  height: 10px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.color-slider .hue-slider {
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+
+.color-slider input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+.color-slider input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  cursor: pointer;
 }
 
 .custom-field {

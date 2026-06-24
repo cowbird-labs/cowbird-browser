@@ -18,6 +18,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fortawesome/free-regular-svg-icons": "^7.2.0",
+    "@fortawesome/free-solid-svg-icons": "^7.2.0",
     "fflate": "^0.8.3",
     "hash-wasm": "^4.12.0",
     "libsodium-wrappers-sumo": "^0.8.4",
@@ -27,6 +29,7 @@
     "webextension-polyfill": "^0.12.0"
   },
   "devDependencies": {
+    "@fortawesome/fontawesome-common-types": "^7.2.0",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

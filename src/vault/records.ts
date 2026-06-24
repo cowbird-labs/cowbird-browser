@@ -1,5 +1,6 @@
 import { b64encode, b64decode } from '../crypto/b64';
 import type { LockedIdentity } from '../crypto/identity';
+import type { SelfSealed } from '../crypto/self';
 import type { PublicKeyEntry } from '../sharing/types';
 
 // At-rest JSON shapes for records the core layer reads/writes directly:
@@ -61,5 +62,38 @@ export function publicKeyEntryFromWire(entityID: string, w: PubkeyRecordWire): P
     pub: b64decode(w.pub),
     sigPub: w.sig_pub ? b64decode(w.sig_pub) : new Uint8Array(0),
     name: w.name ?? '',
+  };
+}
+
+/**
+ * selfSealed is the at-rest form of a crypto.SelfSealed blob (the per-user
+ * organization overlay). Byte fields are standard padded base64; json tags match
+ * the Go struct so the desktop app and the extension read each other's records.
+ */
+export interface SelfSealedWire {
+  ephemeral_pub: string;
+  wrap_nonce: string;
+  wrapped_key: string;
+  nonce: string;
+  ciphertext: string;
+}
+
+export function selfSealedToWire(s: SelfSealed): SelfSealedWire {
+  return {
+    ephemeral_pub: b64encode(s.ephemeralPub),
+    wrap_nonce: b64encode(s.wrapNonce),
+    wrapped_key: b64encode(s.wrappedKey),
+    nonce: b64encode(s.nonce),
+    ciphertext: b64encode(s.ciphertext),
+  };
+}
+
+export function selfSealedFromWire(w: SelfSealedWire): SelfSealed {
+  return {
+    ephemeralPub: b64decode(w.ephemeral_pub),
+    wrapNonce: b64decode(w.wrap_nonce),
+    wrappedKey: b64decode(w.wrapped_key),
+    nonce: b64decode(w.nonce),
+    ciphertext: b64decode(w.ciphertext),
   };
 }

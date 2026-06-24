@@ -22,3 +22,4 @@ export {
   type LockedIdentity,
 } from './identity';
 export { exportKey, importKey } from './export';
+export { sealToSelf, openFromSelf, type SelfSealed } from './self';

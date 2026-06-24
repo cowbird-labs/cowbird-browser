@@ -1,6 +1,7 @@
 import type { VaultConfig } from '../core/config';
 import type { AuthField } from '../auth/types';
 import type { Content, ItemType } from '../items/types';
+import type { Label } from '../organization/index';
 
 // The typed RPC contract between the popup UI and the background service worker.
 // All payloads are JSON-serializable: the worker holds the keys and returns only
@@ -30,6 +31,8 @@ export interface ItemSummary {
   urls?: string[];
   shared: boolean; // true = shared with me; false = owned by me
   ownerName?: string; // for shared items
+  favorite: boolean; // private per-user organization overlay
+  labels: string[]; // assigned label IDs (resolve against the label set)
 }
 
 export interface ShareRecipient {
@@ -44,6 +47,8 @@ export interface ItemDetail {
   content: Content;
   shared: boolean;
   recipients?: ShareRecipient[]; // owned items only: who it is shared with
+  favorite: boolean; // private per-user organization overlay
+  labels: string[]; // assigned label IDs
 }
 
 export interface DirectoryEntry {
@@ -69,7 +74,7 @@ export interface Api {
   lock(): StateInfo;
   disconnect(): StateInfo;
 
-  listItems(): { items: ItemSummary[] };
+  listItems(): { items: ItemSummary[]; labels: Label[] };
   getItem(args: { id: string; shared: boolean }): ItemDetail;
   createItem(args: { content: Content }): { id: string };
   updateItem(args: { id: string; content: Content }): Record<string, never>;
@@ -89,6 +94,16 @@ export interface Api {
     newPassword: string;
     force: boolean;
   }): StateInfo;
+
+  // Organization overlay (favorites + labels), private per user.
+  listLabels(): { labels: Label[] };
+  toggleFavorite(args: { id: string }): { favorite: boolean };
+  assignLabel(args: { id: string; labelId: string }): Record<string, never>;
+  unassignLabel(args: { id: string; labelId: string }): Record<string, never>;
+  addLabel(args: { name: string; color: string }): { label: Label };
+  renameLabel(args: { labelId: string; name: string }): Record<string, never>;
+  recolorLabel(args: { labelId: string; color: string }): Record<string, never>;
+  deleteLabel(args: { labelId: string }): Record<string, never>;
 
   listFormats(): { formats: TransferFormat[] };
   exportItems(args: { format: string }): { fileBase64: string; filename: string };
@@ -112,3 +127,4 @@ export type RpcResponse =
 
 export type { VaultConfig } from '../core/config';
 export type { Content, ItemType } from '../items/types';
+export type { Label } from '../organization/index';

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { rpc } from '../../messaging/rpc';
 import type { StateInfo, TransferFormat } from '../../messaging/protocol';
 import { errorMessage } from '../util';
+import { Icon } from './Icon';
 
 function downloadBase64(fileBase64: string, filename: string): void {
   const bin = atob(fileBase64);
@@ -158,7 +159,7 @@ export function Settings({
     <div>
       <div className="topbar">
         <button className="iconbtn" onClick={onBack}>
-          ‹ Back
+          <Icon name="back" size={14} /> Back
         </button>
         <span className="title">Settings</span>
         <span />

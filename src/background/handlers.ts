@@ -10,6 +10,8 @@ import {
 } from '../core/identity';
 import { rotateKey, rotationCompleter } from '../core/rotation';
 import { exportItems, importItems, removeDuplicateItems } from '../core/transfer';
+import { loadOrganization, saveOrganization } from '../core/organization';
+import type { Organization } from '../organization/index';
 import { allCodecs, getCodec } from '../transfer/index';
 import { hostMatches, classifySubmission } from '../autofill/match';
 import type { HostLogin, SaveClass } from '../autofill/match';
@@ -42,15 +44,41 @@ import {
 } from './state';
 
 // summary projects a decrypted item to a list row, pulling out only the fields
-// the list and (later) autofill need.
-function summary(id: string, content: Content, shared: boolean, ownerName?: string): ItemSummary {
-  const base: ItemSummary = { id, type: content.kind, title: content.data.title, shared };
+// the list and (later) autofill need. Favorite/label organization is layered on
+// from the per-user overlay, keyed by the item's id (itemID or shareID).
+function summary(
+  id: string,
+  content: Content,
+  shared: boolean,
+  org: Organization,
+  ownerName?: string,
+): ItemSummary {
+  const base: ItemSummary = {
+    id,
+    type: content.kind,
+    title: content.data.title,
+    shared,
+    favorite: org.isFavorite(id),
+    labels: org.labelsOf(id),
+  };
   if (ownerName) base.ownerName = ownerName;
   if (content.kind === 'login') {
     base.username = content.data.username;
     if (content.data.urls) base.urls = content.data.urls;
   }
   return base;
+}
+
+// mutateOrg loads the user's organization overlay, applies a mutation, persists
+// the whole record (last-writer-wins, matching the rest of cowbird), and returns
+// the mutation's result. Centralizes the read-modify-write the favorite/label
+// handlers share.
+async function mutateOrg<T>(fn: (org: Organization) => T): Promise<T> {
+  const app = await requireApp();
+  const org = await loadOrganization(app);
+  const result = fn(org);
+  await saveOrganization(app, org);
+  return result;
 }
 
 const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
@@ -125,11 +153,14 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
 
   async listItems() {
     const app = await requireApp();
+    const org = await loadOrganization(app);
     const items: ItemSummary[] = [];
+    const liveIDs = new Set<string>();
 
     for (const env of await app.service.listItems()) {
       try {
-        items.push(summary(env.id, await app.service.openOwnItem(env), false));
+        items.push(summary(env.id, await app.service.openOwnItem(env), false, org));
+        liveIDs.add(env.id);
       } catch {
         // Skip items that fail to decrypt rather than breaking the whole list.
       }
@@ -140,23 +171,38 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
     for (const link of await app.service.listSharedLinks()) {
       try {
         const content = await app.service.openSharedItem(link);
-        items.push(summary(link.shareID, content, true, nameByID.get(link.ownerID) ?? link.ownerID));
+        items.push(
+          summary(link.shareID, content, true, org, nameByID.get(link.ownerID) ?? link.ownerID),
+        );
+        liveIDs.add(link.shareID);
       } catch {
         // Dead link (revoked or envelope gone) — skip.
       }
     }
-    return { items };
+
+    // Lazy cleanup: drop overlay metadata for items/shares that no longer exist
+    // (deleted items, revoked shares) and persist if anything changed.
+    if (org.prune(liveIDs)) {
+      try {
+        await saveOrganization(app, org);
+      } catch {
+        // A failed cleanup write is non-fatal; the list is still correct.
+      }
+    }
+    return { items, labels: org.labels };
   },
 
   async getItem({ id, shared }): Promise<ItemDetail> {
     const app = await requireApp();
+    const org = await loadOrganization(app);
+    const overlay = { favorite: org.isFavorite(id), labels: org.labelsOf(id) };
     if (shared) {
       const link = (await app.service.listSharedLinks()).find(
         (l: SharedLink) => l.shareID === id,
       );
       if (!link) throw new Error('shared item not found');
       const content = await app.service.openSharedItem(link);
-      return { id, type: content.kind, content, shared: true };
+      return { id, type: content.kind, content, shared: true, ...overlay };
     }
     const env: Envelope = await app.session.store.getItem(id);
     const content = await app.service.openOwnItem(env);
@@ -168,7 +214,7 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
       recipientID: r.recipientID,
       recipientName: nameByID.get(r.recipientID) ?? r.recipientID,
     }));
-    return { id, type: content.kind, content, shared: false, recipients };
+    return { id, type: content.kind, content, shared: false, recipients, ...overlay };
   },
 
   async createItem({ content }) {
@@ -186,6 +232,16 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
   async deleteItem({ id }) {
     const app = await requireApp();
     await app.service.deleteItem(id);
+    // Drop the deleted item's favorite/label overlay so it leaves no dangling
+    // organization (FR-009). Best-effort: the item itself is already gone, and
+    // prune() would clean up on the next list regardless.
+    try {
+      const org = await loadOrganization(app);
+      org.forget(id);
+      await saveOrganization(app, org);
+    } catch {
+      // Non-fatal; lazy prune in listItems is the backstop.
+    }
     return {};
   },
 
@@ -249,6 +305,55 @@ const handlers: { [M in Method]: (params: Params<M>) => Promise<Result<M>> } = {
     );
     await setIdentity(identity);
     return stateInfo();
+  },
+
+  async listLabels() {
+    const app = await requireApp();
+    const org = await loadOrganization(app);
+    return { labels: org.labels };
+  },
+
+  async toggleFavorite({ id }) {
+    return mutateOrg((org) => ({ favorite: org.toggleFavorite(id) }));
+  },
+
+  async assignLabel({ id, labelId }) {
+    return mutateOrg((org) => {
+      org.assignLabel(id, labelId);
+      return {};
+    });
+  },
+
+  async unassignLabel({ id, labelId }) {
+    return mutateOrg((org) => {
+      org.unassignLabel(id, labelId);
+      return {};
+    });
+  },
+
+  async addLabel({ name, color }) {
+    return mutateOrg((org) => ({ label: org.addLabel(name, color) }));
+  },
+
+  async renameLabel({ labelId, name }) {
+    return mutateOrg((org) => {
+      org.renameLabel(labelId, name);
+      return {};
+    });
+  },
+
+  async recolorLabel({ labelId, color }) {
+    return mutateOrg((org) => {
+      org.recolorLabel(labelId, color);
+      return {};
+    });
+  },
+
+  async deleteLabel({ labelId }) {
+    return mutateOrg((org) => {
+      org.deleteLabel(labelId);
+      return {};
+    });
   },
 
   async listFormats() {
