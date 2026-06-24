@@ -1,0 +1,5 @@
+# Only promotional store images belong here.
+# Ignore everything, then re-allow this file and promo-*.png.
+*
+!.gitignore
+!promo-*.png
